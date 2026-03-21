@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Surge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <link rel="stylesheet" href="/static/style.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        fontFamily: {
+          sans: ['"Zen Kaku Gothic New"', 'Ubuntu', 'system-ui', 'sans-serif'],
+          mono: ['Ubuntu Mono', 'ui-monospace', 'monospace'],
+        },
+        extend: {
+          letterSpacing: {
+            brand: '0.08em',
+          },
+          colors: {
+            primary: {
+              50:  'hsl(var(--hue) 90% 96%)',
+              100: 'hsl(var(--hue) 85% 90%)',
+              200: 'hsl(var(--hue) 80% 80%)',
+              300: 'hsl(var(--hue) 75% 68%)',
+              400: 'hsl(var(--hue) 70% 55%)',
+              500: 'hsl(var(--hue) 65% 45%)',
+              600: 'hsl(var(--hue) 65% 38%)',
+              700: 'hsl(var(--hue) 60% 30%)',
+              800: 'hsl(var(--hue) 55% 23%)',
+              900: 'hsl(var(--hue) 50% 17%)',
+              950: 'hsl(var(--hue) 45% 10%)',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-gray-100 min-h-screen transition-colors">
+
+  <!-- Header -->
+  <header class="bg-primary-600 dark:bg-primary-900 text-white shadow-sm">
+    <div class="mx-auto px-8 py-4 flex items-center justify-between flex-wrap gap-3">
+      <div class="flex items-center gap-3">
+        <h1 class="text-xl font-bold tracking-brand uppercase">Surge</h1>
+      </div>
+
+      <div class="flex items-center gap-4 flex-wrap">
+        <!-- Color Picker -->
+        <div class="flex items-center gap-2">
+          <label for="colorPicker" class="text-sm opacity-80">テーマ</label>
+          <input type="color" id="colorPicker" value="#06b6d4"
+            class="w-8 h-8 rounded-lg cursor-pointer border-2 border-white/30 bg-transparent">
+        </div>
+
+        <!-- Dark Mode Toggle -->
+        <button id="darkToggle" onclick="toggleDark()"
+          class="w-10 h-10 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+          aria-label="ダークモード切替">
+          <span id="darkIcon">&#9790;</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto px-8 py-8 space-y-8">
+
+    <!-- Controls -->
+    <div class="flex items-center gap-4 flex-wrap">
+      <button id="btnRun" onclick="runScreening()"
+        class="inline-flex items-center justify-center h-10 px-6 text-base font-medium bg-primary-500 text-white rounded-lg hover:bg-primary-700 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+        スクリーニング実行
+      </button>
+      <button id="btnWatchlist" onclick="toggleWatchlistView()"
+        class="inline-flex items-center justify-center h-10 px-4 text-sm font-medium border border-slate-200 dark:border-gray-700 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+        aria-label="ウォッチリスト表示切替">
+        <span class="mr-1.5">&#9733;</span> ウォッチリスト
+      </button>
+      <div class="flex items-center gap-2 leading-normal">
+        <label for="topN" class="text-sm text-slate-500 dark:text-gray-400">上位</label>
+        <select id="topN" class="rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500/50">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="30">30</option>
+          <option value="50">50</option>
+        </select>
+        <span class="text-sm text-slate-500 dark:text-gray-400">銘柄</span>
+      </div>
+      <div id="progressArea" class="hidden flex items-center gap-3 flex-1 min-w-[200px]">
+        <div class="flex-1 bg-slate-200 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
+          <div id="progressBar" class="bg-primary-500 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <span id="progressText" class="text-sm text-slate-500 dark:text-gray-400 whitespace-nowrap">0%</span>
+      </div>
+      <span id="statusText" class="text-sm text-slate-500 dark:text-gray-400"></span>
+    </div>
+
+    <!-- Index Tabs -->
+    <div id="indexTabs" class="hidden flex bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-1 gap-1">
+      <button id="tabSP500" onclick="switchTab('sp500')"
+        class="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer index-tab active">
+        S&P 500
+      </button>
+      <button id="tabNAS100" onclick="switchTab('nasdaq100')"
+        class="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer index-tab">
+        NASDAQ 100
+      </button>
+      <button id="tabNK225" onclick="switchTab('nikkei225')"
+        class="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer index-tab">
+        日経225
+      </button>
+    </div>
+
+    <!-- Summary Cards -->
+    <div id="summaryCards" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="card">
+        <div class="text-sm text-slate-500 dark:text-gray-400">分析銘柄数</div>
+        <div id="cardScreened" class="text-2xl font-bold text-primary-600 dark:text-primary-400">-</div>
+      </div>
+      <div class="card">
+        <div class="text-sm text-slate-500 dark:text-gray-400">平均スコア</div>
+        <div id="cardAvgScore" class="text-2xl font-bold text-primary-600 dark:text-primary-400">-</div>
+      </div>
+      <div class="card">
+        <div class="text-sm text-slate-500 dark:text-gray-400">過熱銘柄 (RSI&gt;70)</div>
+        <div id="cardOverheat" class="text-2xl font-bold text-rose-400">-</div>
+      </div>
+      <div class="card">
+        <div class="text-sm text-slate-500 dark:text-gray-400">ゴールデンクロス</div>
+        <div id="cardGolden" class="text-2xl font-bold text-emerald-500">-</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div id="chartsArea" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="card">
+        <h3 class="text-sm font-medium text-slate-500 dark:text-gray-400 mb-4">モメンタムスコア ランキング</h3>
+        <div class="relative" style="height: 400px">
+          <canvas id="chartBar"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="text-sm font-medium text-slate-500 dark:text-gray-400 mb-4">セクター分布</h3>
+        <div class="relative flex items-center justify-center" style="height: 400px">
+          <canvas id="chartDoughnut"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- RSI Scatter -->
+    <div id="rsiChartArea" class="hidden">
+      <div class="card">
+        <h3 class="text-sm font-medium text-slate-500 dark:text-gray-400 mb-4">RSI vs 1ヶ月リターン</h3>
+        <div class="relative" style="height: 350px">
+          <canvas id="chartScatter"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div id="tableArea" class="hidden">
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50">
+              <th scope="col" class="px-2 py-3 text-center text-xs font-medium text-slate-500 tracking-wider w-8"></th>
+              <th scope="col" class="sortable px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap" data-key="rank">#</th>
+              <th scope="col" class="sortable px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap" data-key="ticker">銘柄</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider hidden md:table-cell">名称</th>
+              <th scope="col" class="sortable px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap" data-key="sector">セクター</th>
+              <th scope="col" class="sortable px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap" data-key="price">株価</th>
+              <th scope="col" class="sortable px-4 py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap" data-key="momentum_score">スコア</th>
+              <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">状態</th>
+              <th scope="col" class="sortable px-4 py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap" data-key="squeeze_score">SQ</th>
+              <th scope="col" class="sortable px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap" data-key="ret_1d">1D</th>
+              <th scope="col" class="sortable px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap" data-key="ret_1w">1W</th>
+              <th scope="col" class="sortable px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap" data-key="ret_1m">1M</th>
+              <th scope="col" class="sortable px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap" data-key="ret_3m">3M</th>
+              <th scope="col" class="sortable px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap" data-key="rsi">RSI</th>
+              <th scope="col" class="sortable px-4 py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap" data-key="vol_ratio">出来高比</th>
+              <th scope="col" class="sortable px-4 py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap" data-key="rs_1m">RS1M</th>
+              <th scope="col" class="sortable px-4 py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap" data-key="rs_3m">RS3M</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4" onclick="if(event.target===this)closeModal()">
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 id="modalTitle" class="text-xl font-bold text-slate-900 dark:text-gray-100"></h2>
+            <button onclick="closeModal()" class="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 text-2xl leading-none rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer" aria-label="閉じる">&times;</button>
+          </div>
+          <div id="modalContent"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="text-center py-16">
+      <div class="w-16 h-16 bg-slate-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+        <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+      </div>
+      <h2 class="text-base font-medium text-slate-900 dark:text-gray-300 mb-1">まだスクリーニング結果がありません</h2>
+      <p class="text-sm text-slate-500 dark:text-gray-500">「スクリーニング実行」をクリックしてモメンタム分析を開始</p>
+    </div>
+
+  </main>
+
+  <footer class="text-center py-8 text-xs text-slate-400 dark:text-gray-600 border-t border-slate-200 dark:border-gray-800">
+    Surge &mdash; Yahoo Finance &mdash; 教育・研究目的のみ
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
