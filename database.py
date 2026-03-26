@@ -165,6 +165,120 @@ def get_session_results(session_id):
     return [dict(r) for r in rows]
 
 
+def get_latest_sessions_by_index():
+    """Get the most recent session for each index, with full results."""
+    conn = _connect()
+    results = {}
+    for idx in ("sp500", "nasdaq100", "nikkei225"):
+        session = conn.execute(
+            "SELECT * FROM screening_sessions WHERE index_name = ? ORDER BY id DESC LIMIT 1",
+            (idx,),
+        ).fetchone()
+        if not session:
+            continue
+        rows = conn.execute(
+            "SELECT * FROM screening_results WHERE session_id = ? ORDER BY rank",
+            (session["id"],),
+        ).fetchall()
+        if not rows:
+            continue
+
+        ranking = []
+        for r in rows:
+            ranking.append({
+                "rank": r["rank"],
+                "ticker": r["ticker"],
+                "name": r["name"],
+                "sector": r["sector"],
+                "price": r["price"],
+                "momentum_score": r["momentum_score"],
+                "squeeze_score": r["squeeze_score"],
+                "technicals": {
+                    "ret_1d": r["ret_1d"], "ret_1w": r["ret_1w"],
+                    "ret_1m": r["ret_1m"], "ret_3m": r["ret_3m"],
+                    "vol_ratio": r["vol_ratio"], "ma50_dev": r["ma50_dev"],
+                    "ma200_dev": r["ma200_dev"], "macd_hist_pct": r["macd_hist_pct"],
+                    "rsi": r["rsi"], "golden_cross": bool(r["golden_cross"]),
+                    "overheat": bool(r["overheat"]),
+                    "sector_etf": r["sector_etf"],
+                    "rs_1m": r["rs_1m"], "rs_3m": r["rs_3m"],
+                    "rs_label": _compute_rs_label(r),
+                },
+                "fundamentals": {
+                    "market_cap_b": r["market_cap_b"], "pe_trailing": r["pe_trailing"],
+                    "pe_forward": r["pe_forward"], "pb": r["pb"],
+                    "dividend_yield": r["dividend_yield"],
+                    "revenue_growth": r["revenue_growth"],
+                    "earnings_growth": r["earnings_growth"],
+                    "eps": r["eps"], "target_price": r["target_price"],
+                    "recommendation": r["recommendation"],
+                },
+                "short_interest": {
+                    "short_pct_of_float": r["short_pct_of_float"],
+                    "short_ratio": r["short_ratio"],
+                    "shares_short": r["shares_short"],
+                    "shares_short_prior_month": r["shares_short_prior_month"],
+                    "float_shares": r["float_shares"],
+                    "short_change_pct": r["short_change_pct"],
+                },
+            })
+
+        # Build sector distribution
+        sector_dist = {}
+        for row in ranking:
+            s = row["sector"] or "Unknown"
+            sector_dist[s] = sector_dist.get(s, 0) + 1
+
+        # Summary
+        scores = [row["momentum_score"] for row in ranking if row["momentum_score"]]
+        avg_score = round(sum(scores) / len(scores), 1) if scores else 0
+        overheat_count = sum(1 for row in ranking if row["technicals"]["overheat"])
+        golden_count = sum(1 for row in ranking if row["technicals"]["golden_cross"])
+
+        # Latest breadth
+        breadth_rows = conn.execute(
+            """SELECT advances, declines, breadth_pct FROM market_breadth
+               WHERE index_name = ? ORDER BY date DESC LIMIT 1""",
+            (idx,),
+        ).fetchone()
+        latest_breadth = {
+            "advances": breadth_rows["advances"],
+            "declines": breadth_rows["declines"],
+            "breadth_pct": breadth_rows["breadth_pct"],
+        } if breadth_rows else {"advances": 0, "declines": 0, "breadth_pct": 0}
+
+        index_label = {"sp500": "S&P 500", "nasdaq100": "NASDAQ 100", "nikkei225": "日経225"}[idx]
+        results[idx] = {
+            "index": index_label,
+            "total_screened": session["total_screened"],
+            "generated_at": session["generated_at"],
+            "momentum_ranking": ranking,
+            "sector_distribution": sector_dist,
+            "summary": {
+                "avg_score": avg_score,
+                "overheat_count": overheat_count,
+                "golden_cross_count": golden_count,
+            },
+            "latest_breadth": latest_breadth,
+        }
+    conn.close()
+    return results
+
+
+def _compute_rs_label(r):
+    """Compute RS label from DB row."""
+    THEME_TICKERS = {"MSTR", "COIN", "MARA", "RIOT", "CLSK", "HUT", "BITF", "CIFR"}
+    if r["ticker"] in THEME_TICKERS:
+        return "theme"
+    rs1 = r["rs_1m"]
+    rs3 = r["rs_3m"]
+    if rs1 is None:
+        return None
+    if rs1 > 2:
+        return "prime" if (rs3 is not None and rs3 > 0) else "short_term"
+    return "sector_driven"
+
+
 # ── Market Breadth ──
 
 def save_breadth(index_name, records):
