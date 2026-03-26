@@ -58,25 +58,31 @@ def get_nasdaq100_tickers():
 
 
 def get_nikkei225_tickers():
-    """Fetch Nikkei 225 constituent tickers from Wikipedia (Japanese)."""
+    """Fetch Nikkei 225 constituent tickers from Wikipedia (Japanese).
+
+    Returns (tickers, sectors, names) where names maps ticker -> Japanese name.
+    """
     url = "https://ja.wikipedia.org/wiki/日経平均株価"
     headers = {"User-Agent": "Mozilla/5.0"}
     resp = requests.get(url, headers=headers)
     resp.raise_for_status()
     tables = pd.read_html(io.StringIO(resp.text))
     tickers = []
+    names = {}
     for table in tables:
         cols = [str(c) for c in table.columns]
         if "証券コード" in cols and "銘柄" in cols:
             for _, row in table.iterrows():
                 code = str(row["証券コード"]).strip()
                 if code.isdigit():
-                    tickers.append(code + ".T")
+                    t = code + ".T"
+                    tickers.append(t)
+                    names[t] = str(row["銘柄"]).strip()
     if not tickers:
         raise ValueError("Could not find Nikkei 225 ticker table")
     # All Nikkei 225 stocks use ^N225 as benchmark (no sector ETF mapping)
     sectors = {t: "N/A" for t in tickers}
-    return tickers, sectors
+    return tickers, sectors, names
 
 
 def compute_rsi(series, period=14):
@@ -391,10 +397,11 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
 
     is_japan = index == "nikkei225"
 
+    jp_names = {}
     if index == "nasdaq100":
         tickers, sectors = get_nasdaq100_tickers()
     elif index == "nikkei225":
-        tickers, sectors = get_nikkei225_tickers()
+        tickers, sectors, jp_names = get_nikkei225_tickers()
     else:
         tickers, sectors = get_sp500_tickers()
 
@@ -421,10 +428,12 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
     for rank_idx, (_, row) in enumerate(top.iterrows(), 1):
         ticker = row["ticker"]
         fund = fund_map.get(ticker, {})
+        # Use Japanese name from Wikipedia for Nikkei 225, fallback to yfinance shortName
+        display_name = jp_names.get(ticker) or fund.get("short_name", ticker)
         ranking.append({
             "rank": rank_idx,
             "ticker": ticker,
-            "name": fund.get("short_name", ticker),
+            "name": display_name,
             "sector": row["sector"],
             "price": row["price"],
             "momentum_score": round(row["momentum_score"] * 100, 1),
