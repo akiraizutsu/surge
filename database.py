@@ -68,7 +68,13 @@ def init_db():
                 shares_short_prior_month INTEGER,
                 float_shares INTEGER,
                 short_change_pct REAL,
-                squeeze_score REAL
+                squeeze_score REAL,
+                high_52w REAL,
+                low_52w REAL,
+                dist_from_high REAL,
+                bb_width REAL,
+                earnings_date TEXT,
+                days_to_earnings INTEGER
             );
 
             CREATE TABLE IF NOT EXISTS value_gap_results (
@@ -150,8 +156,10 @@ def save_results(session_id, ranking):
                     revenue_growth, earnings_growth, eps, target_price, recommendation,
                     sector_etf, rs_1m, rs_3m,
                     short_pct_of_float, short_ratio, shares_short, shares_short_prior_month,
-                    float_shares, short_change_pct, squeeze_score
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    float_shares, short_change_pct, squeeze_score,
+                    high_52w, low_52w, dist_from_high, bb_width,
+                    earnings_date, days_to_earnings
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     session_id, r.get("rank"), r.get("ticker"), r.get("name"),
                     r.get("sector"), r.get("price"), r.get("momentum_score"),
@@ -169,6 +177,8 @@ def save_results(session_id, ranking):
                     si.get("shares_short"), si.get("shares_short_prior_month"),
                     si.get("float_shares"), si.get("short_change_pct"),
                     r.get("squeeze_score"),
+                    t.get("high_52w"), t.get("low_52w"), t.get("dist_from_high"), t.get("bb_width"),
+                    f.get("earnings_date"), f.get("days_to_earnings"),
                 ),
             )
     conn.close()
@@ -254,6 +264,13 @@ def get_latest_sessions_by_index():
                     "sector_etf": r["sector_etf"],
                     "rs_1m": r["rs_1m"], "rs_3m": r["rs_3m"],
                     "rs_label": _compute_rs_label(r),
+                    "high_52w": r["high_52w"] if "high_52w" in r.keys() else None,
+                    "low_52w": r["low_52w"] if "low_52w" in r.keys() else None,
+                    "dist_from_high": r["dist_from_high"] if "dist_from_high" in r.keys() else None,
+                    "dist_from_low": None,
+                    "is_breakout": (r["dist_from_high"] or -999) >= -1 if "dist_from_high" in r.keys() else False,
+                    "bb_width": r["bb_width"] if "bb_width" in r.keys() else None,
+                    "bb_squeeze": (r["bb_width"] or 999) < 6 if "bb_width" in r.keys() else False,
                 },
                 "fundamentals": {
                     "market_cap_b": r["market_cap_b"], "pe_trailing": r["pe_trailing"],
@@ -263,6 +280,8 @@ def get_latest_sessions_by_index():
                     "earnings_growth": r["earnings_growth"],
                     "eps": r["eps"], "target_price": r["target_price"],
                     "recommendation": r["recommendation"],
+                    "earnings_date": r["earnings_date"] if "earnings_date" in r.keys() else None,
+                    "days_to_earnings": r["days_to_earnings"] if "days_to_earnings" in r.keys() else None,
                 },
                 "short_interest": {
                     "short_pct_of_float": r["short_pct_of_float"],
@@ -312,6 +331,8 @@ def get_latest_sessions_by_index():
             "generated_at": session["generated_at"],
             "momentum_ranking": ranking,
             "value_gap_ranking": vg_ranking,
+            "sector_rotation": [],
+            "breakout_ranking": [],
             "sector_distribution": sector_dist,
             "summary": {
                 "avg_score": avg_score,

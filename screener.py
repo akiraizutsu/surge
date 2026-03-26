@@ -244,6 +244,22 @@ def screen_momentum(tickers, sectors, progress_cb=None, is_japan=False):
             above_200ma = current_price > ma_200
             golden_cross = bool(above_50ma and above_200ma)
 
+            # 52-week high/low and breakout detection
+            trading_days_52w = min(252, len(close))
+            high_52w = float(df["High"].iloc[-trading_days_52w:].max()) if "High" in df.columns else current_price
+            low_52w = float(df["Low"].iloc[-trading_days_52w:].min()) if "Low" in df.columns else current_price
+            dist_from_high = round((current_price / high_52w - 1) * 100, 2) if high_52w > 0 else 0
+            dist_from_low = round((current_price / low_52w - 1) * 100, 2) if low_52w > 0 else 0
+            is_breakout = current_price >= high_52w * 0.99  # within 1% of 52W high
+
+            # Bollinger Band width (squeeze detection)
+            sma_20 = close.iloc[-20:].mean() if len(close) >= 20 else current_price
+            std_20 = close.iloc[-20:].std() if len(close) >= 20 else 0
+            bb_upper = sma_20 + 2 * std_20
+            bb_lower = sma_20 - 2 * std_20
+            bb_width = round(float((bb_upper - bb_lower) / sma_20 * 100), 2) if sma_20 > 0 else 0
+            bb_squeeze = bb_width < 6  # narrow bands = compression
+
             # Relative strength vs benchmark
             stock_sector = sectors.get(ticker, "N/A")
             if is_japan:
@@ -283,6 +299,13 @@ def screen_momentum(tickers, sectors, progress_cb=None, is_japan=False):
                 "rs_1m": rs_1m,
                 "rs_3m": rs_3m,
                 "rs_label": rs_label,
+                "high_52w": round(high_52w, 2),
+                "low_52w": round(low_52w, 2),
+                "dist_from_high": dist_from_high,
+                "dist_from_low": dist_from_low,
+                "is_breakout": is_breakout,
+                "bb_width": bb_width,
+                "bb_squeeze": bb_squeeze,
             })
         except Exception:
             continue
@@ -348,6 +371,65 @@ def compute_breadth(data, tickers):
     return breadth_data
 
 
+def compute_sector_rotation(results, benchmark_returns, is_japan=False):
+    """Compute sector rotation data — average returns & RS per sector.
+
+    Returns: list of {sector, etf, ret_1m_avg, ret_3m_avg, etf_1m, etf_3m,
+                       rs_1m_avg, stock_count, trend}
+    """
+    # Group results by sector
+    sector_data = {}
+    for r in results:
+        s = r.get("sector", "Unknown")
+        if not s:
+            continue
+        if s not in sector_data:
+            sector_data[s] = {"ret_1m": [], "ret_3m": [], "rs_1m": []}
+        if r.get("ret_1m") is not None:
+            sector_data[s]["ret_1m"].append(r["ret_1m"])
+        if r.get("ret_3m") is not None:
+            sector_data[s]["ret_3m"].append(r["ret_3m"])
+        if r.get("rs_1m") is not None:
+            sector_data[s]["rs_1m"].append(r["rs_1m"])
+
+    rotation = []
+    for sector, vals in sector_data.items():
+        if not vals["ret_1m"]:
+            continue
+
+        ret_1m_avg = round(sum(vals["ret_1m"]) / len(vals["ret_1m"]), 2)
+        ret_3m_avg = round(sum(vals["ret_3m"]) / len(vals["ret_3m"]), 2) if vals["ret_3m"] else 0
+        rs_1m_avg = round(sum(vals["rs_1m"]) / len(vals["rs_1m"]), 2) if vals["rs_1m"] else 0
+
+        etf = SECTOR_ETF_MAP.get(sector, "^N225" if is_japan else "SPY")
+        br = benchmark_returns.get(etf, {})
+
+        # Determine trend: 1M stronger than 3M = accelerating
+        if ret_1m_avg > 0 and ret_3m_avg > 0:
+            trend = "加速" if ret_1m_avg > ret_3m_avg / 3 else "安定"
+        elif ret_1m_avg > 0 and ret_3m_avg <= 0:
+            trend = "回復"
+        elif ret_1m_avg <= 0 and ret_3m_avg > 0:
+            trend = "減速"
+        else:
+            trend = "衰退"
+
+        rotation.append({
+            "sector": sector,
+            "etf": etf,
+            "ret_1m_avg": ret_1m_avg,
+            "ret_3m_avg": ret_3m_avg,
+            "etf_1m": br.get("ret_1m", 0),
+            "etf_3m": br.get("ret_3m", 0),
+            "rs_1m_avg": rs_1m_avg,
+            "stock_count": len(vals["ret_1m"]),
+            "trend": trend,
+        })
+
+    rotation.sort(key=lambda x: x["ret_1m_avg"], reverse=True)
+    return rotation
+
+
 def compute_momentum_score(results):
     """Compute composite momentum score using percentile ranking."""
     df = pd.DataFrame(results)
@@ -391,6 +473,30 @@ def get_fundamentals(tickers, progress_cb=None, is_japan=False):
             if shares_short and shares_short_prior and shares_short_prior > 0:
                 short_change_pct = round((shares_short - shares_short_prior) / shares_short_prior * 100, 1)
 
+            # Earnings date
+            earnings_date = None
+            days_to_earnings = None
+            try:
+                cal = yf.Ticker(ticker).calendar
+                if isinstance(cal, dict):
+                    ed_list = cal.get("Earnings Date", [])
+                    if ed_list:
+                        ed = ed_list[0]  # datetime.date object
+                        from datetime import date as _date
+                        if isinstance(ed, _date):
+                            earnings_date = ed.strftime("%Y-%m-%d")
+                            days_to_earnings = (ed - datetime.now().date()).days
+                        elif hasattr(ed, "strftime"):
+                            earnings_date = ed.strftime("%Y-%m-%d")
+                elif isinstance(cal, pd.DataFrame) and "Earnings Date" in cal.index:
+                    ed = cal.loc["Earnings Date"].iloc[0]
+                    if hasattr(ed, "strftime"):
+                        earnings_date = ed.strftime("%Y-%m-%d")
+                        dte = ed if not hasattr(ed, "date") else ed.date()
+                        days_to_earnings = (dte - datetime.now().date()).days
+            except Exception:
+                pass
+
             fundamentals.append({
                 "ticker": ticker,
                 "market_cap_b": round(info.get("marketCap", 0) / 1e9, 1),
@@ -410,6 +516,8 @@ def get_fundamentals(tickers, progress_cb=None, is_japan=False):
                 "shares_short_prior_month": shares_short_prior,
                 "float_shares": info.get("floatShares"),
                 "short_change_pct": short_change_pct,
+                "earnings_date": earnings_date,
+                "days_to_earnings": days_to_earnings,
             })
         except Exception:
             fundamentals.append({"ticker": ticker, "short_name": ticker, "error": True})
@@ -636,6 +744,13 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
                 "rs_1m": row.get("rs_1m", 0),
                 "rs_3m": row.get("rs_3m", 0),
                 "rs_label": row.get("rs_label", ""),
+                "high_52w": row.get("high_52w"),
+                "low_52w": row.get("low_52w"),
+                "dist_from_high": row.get("dist_from_high"),
+                "dist_from_low": row.get("dist_from_low"),
+                "is_breakout": bool(row.get("is_breakout", False)),
+                "bb_width": row.get("bb_width"),
+                "bb_squeeze": bool(row.get("bb_squeeze", False)),
                 "golden_cross": row["golden_cross"],
                 "overheat": bool(row["overheat"]),
             },
@@ -650,6 +765,8 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
                 "eps": fund.get("eps"),
                 "target_price": fund.get("target_price"),
                 "recommendation": fund.get("recommendation"),
+                "earnings_date": fund.get("earnings_date"),
+                "days_to_earnings": fund.get("days_to_earnings"),
             },
             "short_interest": {
                 "short_pct_of_float": fund.get("short_pct_of_float"),
@@ -687,6 +804,43 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
         val = row.get("squeeze_score")
         ranking[i]["squeeze_score"] = round(float(val), 1) if pd.notna(val) else None
 
+    # Breakout candidates (within 5% of 52W high or BB squeeze)
+    breakout_candidates = [r for r in results if r.get("dist_from_high") is not None and (r["dist_from_high"] >= -5 or r.get("bb_squeeze"))]
+    breakout_candidates.sort(key=lambda r: r.get("dist_from_high", -999), reverse=True)
+    breakout_ranking = []
+    for rank_idx, r in enumerate(breakout_candidates[:30], 1):
+        display_name = jp_names.get(r["ticker"], r["ticker"]) if is_japan else r["ticker"]
+        status = []
+        if r.get("is_breakout"):
+            status.append("新高値")
+        if r.get("bb_squeeze"):
+            status.append("BB圧縮")
+        if r.get("golden_cross"):
+            status.append("GC")
+        breakout_ranking.append({
+            "rank": rank_idx,
+            "ticker": r["ticker"],
+            "name": display_name,
+            "sector": r["sector"],
+            "price": r["price"],
+            "high_52w": r["high_52w"],
+            "low_52w": r["low_52w"],
+            "dist_from_high": r["dist_from_high"],
+            "dist_from_low": r["dist_from_low"],
+            "is_breakout": r["is_breakout"],
+            "bb_width": r["bb_width"],
+            "bb_squeeze": r["bb_squeeze"],
+            "momentum_score": round(float(df.loc[df["ticker"] == r["ticker"], "momentum_score"].iloc[0]) * 100, 1) if r["ticker"] in df["ticker"].values else 0,
+            "rsi": r["rsi"],
+            "status": " / ".join(status) if status else "-",
+        })
+
+    # Sector rotation analysis
+    # Need benchmark returns — re-use the same data already fetched during screen_momentum
+    sectors_used = set(r["sector"] for r in results if r.get("sector"))
+    benchmark_rets = _get_benchmark_returns(sectors_used, start_date=datetime.now() - timedelta(days=400), end_date=datetime.now(), is_japan=is_japan)
+    sector_rotation = compute_sector_rotation(results, benchmark_rets, is_japan=is_japan)
+
     # Sector summary from all screened results
     sector_counts = {}
     for r in results:
@@ -720,6 +874,8 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
         "all_sectors": sector_counts,
         "momentum_ranking": ranking,
         "value_gap_ranking": value_gap_ranking[:20],
+        "sector_rotation": sector_rotation,
+        "breakout_ranking": breakout_ranking,
         "breadth": breadth_data,
         "latest_breadth": latest_breadth,
     }

@@ -17,6 +17,7 @@ let chartBar = null;
 let chartDoughnut = null;
 let chartScatter = null;
 let chartBreadth = null;
+let chartSectorRotation = null;
 
 // ── Color System ──
 function hexToHsl(hex) {
@@ -354,18 +355,29 @@ function renderCharts(data) {
 function switchSubTab(tab) {
   activeSubTab = tab;
   document.querySelectorAll('#subTabs .index-tab').forEach(btn => btn.classList.remove('active'));
+  const tabBtnMap = { momentum: 'subTabMomentum', contrarian: 'subTabContrarian', rotation: 'subTabRotation', breakout: 'subTabBreakout' };
+  document.getElementById(tabBtnMap[tab])?.classList.add('active');
+
+  // Hide all sub-tab areas
+  ['tableArea', 'contrarianTableArea', 'sectorRotationArea', 'breakoutTableArea'].forEach(id => {
+    document.getElementById(id)?.classList.add('hidden');
+  });
+
   if (tab === 'momentum') {
-    document.getElementById('subTabMomentum').classList.add('active');
     document.getElementById('tableArea').classList.remove('hidden');
-    document.getElementById('contrarianTableArea').classList.add('hidden');
     if (screeningData) renderTable(screeningData.momentum_ranking);
-  } else {
-    document.getElementById('subTabContrarian').classList.add('active');
-    document.getElementById('tableArea').classList.add('hidden');
+  } else if (tab === 'contrarian') {
     document.getElementById('contrarianTableArea').classList.remove('hidden');
-    if (screeningData && screeningData.value_gap_ranking) {
-      renderContrarianTable(screeningData.value_gap_ranking);
+    if (screeningData && screeningData.value_gap_ranking) renderContrarianTable(screeningData.value_gap_ranking);
+  } else if (tab === 'rotation') {
+    document.getElementById('sectorRotationArea').classList.remove('hidden');
+    if (screeningData && screeningData.sector_rotation) {
+      renderSectorRotationChart(screeningData.sector_rotation);
+      renderRotationTable(screeningData.sector_rotation);
     }
+  } else if (tab === 'breakout') {
+    document.getElementById('breakoutTableArea').classList.remove('hidden');
+    if (screeningData && screeningData.breakout_ranking) renderBreakoutTable(screeningData.breakout_ranking);
   }
 }
 
@@ -600,6 +612,13 @@ function renderTable(ranking) {
     if (t.overheat) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-300 font-medium">過熱</span>';
     if (t.golden_cross) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-medium">GC</span>';
     if (rsInfo) status += `<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full ${rsInfo.cls} font-medium">${rsInfo.text}</span>`;
+    if (t.is_breakout) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 font-medium">52W</span>';
+    if (t.bb_squeeze) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-orange-50 dark:bg-orange-900/20 text-orange-500 dark:text-orange-400 font-medium">BB圧</span>';
+    const f = r.fundamentals;
+    if (f && f.days_to_earnings != null && f.days_to_earnings >= 0 && f.days_to_earnings <= 14) {
+      const urgency = f.days_to_earnings <= 3 ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-500' : 'bg-slate-100 dark:bg-gray-800 text-slate-500';
+      status += `<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full ${urgency} font-medium">決算${f.days_to_earnings}日</span>`;
+    }
 
     return `<tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors" onclick='showDetail(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
       ${starCell}
@@ -619,6 +638,107 @@ function renderTable(ranking) {
       <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap hidden lg:table-cell">${t.vol_ratio}x</td>
       <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap hidden lg:table-cell ${retClass(t.rs_1m)}">${t.rs_1m != null ? (t.rs_1m > 0 ? '+' : '') + t.rs_1m + '%' : '-'}</td>
       <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap hidden lg:table-cell ${retClass(t.rs_3m)}">${t.rs_3m != null ? (t.rs_3m > 0 ? '+' : '') + t.rs_3m + '%' : '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Sector Rotation Chart ──
+function renderSectorRotationChart(rotation) {
+  const isDark = document.documentElement.classList.contains('dark');
+  const textColor = isDark ? '#9ca3af' : '#6b7280';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const colors = getThemeColors(rotation.length);
+
+  const ctx = document.getElementById('chartSectorRotation').getContext('2d');
+  if (chartSectorRotation) chartSectorRotation.destroy();
+
+  chartSectorRotation = new Chart(ctx, {
+    type: 'bubble',
+    data: {
+      datasets: rotation.map((s, i) => ({
+        label: s.sector,
+        data: [{ x: s.ret_3m_avg, y: s.ret_1m_avg, r: Math.max(4, Math.min(s.stock_count / 2, 25)) }],
+        backgroundColor: colors[i] + 'aa',
+        borderColor: colors[i],
+        borderWidth: 2,
+      })),
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const s = rotation[ctx.datasetIndex];
+              return `${s.sector}: 1M ${s.ret_1m_avg}% / 3M ${s.ret_3m_avg}% (${s.stock_count}銘柄) [${s.trend}]`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: '3Mリターン (%)', color: textColor },
+          grid: { color: gridColor },
+          ticks: { color: textColor },
+        },
+        y: {
+          title: { display: true, text: '1Mリターン (%)', color: textColor },
+          grid: { color: gridColor },
+          ticks: { color: textColor },
+        }
+      }
+    }
+  });
+}
+
+function renderRotationTable(rotation) {
+  const tbody = document.getElementById('rotationTableBody');
+  const retClass = (v) => v > 0 ? 'text-emerald-600 dark:text-emerald-400' : v < 0 ? 'text-rose-400 dark:text-rose-300' : '';
+  const trendColors = {
+    '加速': 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
+    '安定': 'bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400',
+    '回復': 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400',
+    '減速': 'bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400',
+    '衰退': 'bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-300',
+  };
+
+  tbody.innerHTML = rotation.map(s => `
+    <tr class="border-b border-slate-100 dark:border-gray-800">
+      <td class="px-2 sm:px-4 py-2 sm:py-3 font-medium text-sm whitespace-nowrap">${s.sector}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-center text-xs text-slate-400 hidden sm:table-cell">${s.etf}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-sm whitespace-nowrap ${retClass(s.ret_1m_avg)}">${s.ret_1m_avg > 0 ? '+' : ''}${s.ret_1m_avg}%</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-sm whitespace-nowrap ${retClass(s.ret_3m_avg)}">${s.ret_3m_avg > 0 ? '+' : ''}${s.ret_3m_avg}%</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-sm whitespace-nowrap hidden sm:table-cell ${retClass(s.rs_1m_avg)}">${s.rs_1m_avg > 0 ? '+' : ''}${s.rs_1m_avg}%</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-center text-sm hidden sm:table-cell">${s.stock_count}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-center"><span class="inline-block px-2 py-0.5 text-[10px] rounded-full font-medium ${trendColors[s.trend] || ''}">${s.trend}</span></td>
+    </tr>
+  `).join('');
+}
+
+// ── Breakout Table ──
+function renderBreakoutTable(ranking) {
+  const tbody = document.getElementById('breakoutTableBody');
+  const retClass = (v) => v > 0 ? 'text-emerald-600 dark:text-emerald-400' : v < 0 ? 'text-rose-400 dark:text-rose-300' : '';
+
+  tbody.innerHTML = ranking.map(r => {
+    let statusBadges = '';
+    if (r.is_breakout) statusBadges += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-medium">新高値</span>';
+    if (r.bb_squeeze) statusBadges += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-medium">BB圧縮</span>';
+
+    return `<tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-slate-400 text-sm whitespace-nowrap">${r.rank}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 font-semibold text-primary-600 dark:text-primary-400 text-sm whitespace-nowrap">${r.ticker}</td>
+      <td class="px-4 py-3 text-slate-500 dark:text-gray-400 hidden lg:table-cell text-xs max-w-[180px] truncate">${r.name}</td>
+      <td class="px-4 py-3 text-xs text-slate-600 dark:text-gray-400 whitespace-nowrap hidden md:table-cell">${r.sector}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-sm whitespace-nowrap">${formatPrice(r.price)}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-sm text-slate-400 whitespace-nowrap">${formatPrice(r.high_52w)}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-sm whitespace-nowrap ${retClass(r.dist_from_high)}">${r.dist_from_high > 0 ? '+' : ''}${r.dist_from_high}%</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-sm whitespace-nowrap hidden sm:table-cell">${r.bb_width}%</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap"><div class="flex items-center gap-1">${statusBadges || '-'}</div></td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-bold text-sm whitespace-nowrap">${r.momentum_score}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-sm whitespace-nowrap hidden sm:table-cell">${r.rsi}</td>
     </tr>`;
   }).join('');
 }
@@ -696,6 +816,12 @@ function showDetail(stock) {
         ['RS 1M', fmtPct(t.rs_1m)],
         ['RS 3M', fmtPct(t.rs_3m)],
         ['RS判定', {'prime':'本命','short_term':'短期のみ','sector_driven':'劣後','theme':'テーマ依存'}[t.rs_label] || '-'],
+        ['52W高値', t.high_52w ? formatPrice(t.high_52w) : '-'],
+        ['52W安値', t.low_52w ? formatPrice(t.low_52w) : '-'],
+        ['52W乖離', t.dist_from_high != null ? (t.dist_from_high > 0 ? '+' : '') + t.dist_from_high + '%' : '-'],
+        ['BB幅', t.bb_width != null ? t.bb_width + '%' : '-'],
+        ['決算日', f.earnings_date || '-'],
+        ['決算まで', f.days_to_earnings != null ? f.days_to_earnings + '日' : '-'],
       ].map(([label, val]) => `
         <div class="bg-slate-50 dark:bg-gray-800 rounded-lg p-2.5 text-center border border-slate-100 dark:border-gray-700">
           <div class="text-[10px] text-slate-400 dark:text-gray-500">${label}</div>
