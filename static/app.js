@@ -704,13 +704,12 @@ async function init() {
         const keys = Object.keys(allResults);
         if (keys.length > 0) {
           document.getElementById('indexTabs').classList.remove('hidden');
-          // Activate the first available tab
           if (allResults[activeTab]) {
             switchTab(activeTab);
           } else {
             switchTab(keys[0]);
           }
-          document.getElementById('emptyState').classList.add('hidden');
+          return; // Data loaded, don't show empty state
         }
       }
     }
@@ -718,9 +717,11 @@ async function init() {
       document.getElementById('btnRun').disabled = true;
       document.getElementById('btnRun').textContent = '分析中...';
       document.getElementById('progressArea').classList.remove('hidden');
-      document.getElementById('emptyState').classList.add('hidden');
       pollProgress();
+      return;
     }
+    // No results and not running — show empty state
+    document.getElementById('emptyState').classList.remove('hidden');
   });
 }
 
