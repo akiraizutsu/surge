@@ -82,7 +82,7 @@ function initDarkMode() {
 // ── Tab Switching ──
 function switchTab(idx) {
   activeTab = idx;
-  document.querySelectorAll('.index-tab').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('#indexTabs .index-tab').forEach(btn => btn.classList.remove('active'));
   const tabId = { sp500: 'tabSP500', nasdaq100: 'tabNAS100', nikkei225: 'tabNK225' }[idx];
   document.getElementById(tabId).classList.add('active');
 
