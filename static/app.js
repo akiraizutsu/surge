@@ -467,7 +467,6 @@ function renderTable(ranking) {
 
     const sqScore = r.squeeze_score;
     const sqClass = sqScore != null && sqScore >= 70 ? 'text-rose-500 font-bold' : '';
-    const sqCell = `<td class="px-4 py-3 text-right font-mono text-sm ${sqClass}">${sqScore != null ? sqScore.toFixed(1) : '-'}</td>`;
 
     // RS label badge
     const rsLabelMap = {
@@ -485,22 +484,22 @@ function renderTable(ranking) {
 
     return `<tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors" onclick='showDetail(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
       ${starCell}
-      <td class="px-4 py-3 text-slate-400 text-sm whitespace-nowrap">${r.rank}</td>
-      <td class="px-4 py-3 font-semibold text-primary-600 dark:text-primary-400 text-sm whitespace-nowrap">${r.ticker}</td>
-      <td class="px-4 py-3 text-slate-500 dark:text-gray-400 hidden md:table-cell text-xs max-w-[180px] truncate">${r.name}</td>
-      <td class="px-4 py-3 text-xs text-slate-600 dark:text-gray-400 whitespace-nowrap">${r.sector}</td>
-      <td class="px-4 py-3 text-right font-mono text-sm text-slate-900 dark:text-gray-100 whitespace-nowrap">${formatPrice(r.price)}</td>
-      <td class="px-4 py-3 text-right font-bold text-sm whitespace-nowrap">${r.momentum_score}</td>
-      <td class="px-4 py-3 whitespace-nowrap"><div class="flex items-center gap-1">${status || '<span class="text-slate-300 dark:text-gray-600">-</span>'}</div></td>
-      ${sqCell}
-      <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap ${retClass(t.ret_1d)}">${t.ret_1d > 0 ? '+' : ''}${t.ret_1d}%</td>
-      <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap ${retClass(t.ret_1w)}">${t.ret_1w > 0 ? '+' : ''}${t.ret_1w}%</td>
-      <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap ${retClass(t.ret_1m)}">${t.ret_1m > 0 ? '+' : ''}${t.ret_1m}%</td>
-      <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap ${retClass(t.ret_3m)}">${t.ret_3m > 0 ? '+' : ''}${t.ret_3m}%</td>
-      <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap ${rsiClass}">${t.rsi}</td>
-      <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap">${t.vol_ratio}x</td>
-      <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap ${retClass(t.rs_1m)}">${t.rs_1m != null ? (t.rs_1m > 0 ? '+' : '') + t.rs_1m + '%' : '-'}</td>
-      <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap ${retClass(t.rs_3m)}">${t.rs_3m != null ? (t.rs_3m > 0 ? '+' : '') + t.rs_3m + '%' : '-'}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-slate-400 text-xs sm:text-sm whitespace-nowrap">${r.rank}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 font-semibold text-primary-600 dark:text-primary-400 text-xs sm:text-sm whitespace-nowrap">${r.ticker}</td>
+      <td class="px-4 py-3 text-slate-500 dark:text-gray-400 hidden lg:table-cell text-xs max-w-[180px] truncate">${r.name}</td>
+      <td class="px-4 py-3 text-xs text-slate-600 dark:text-gray-400 whitespace-nowrap hidden md:table-cell">${r.sector}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm text-slate-900 dark:text-gray-100 whitespace-nowrap hidden sm:table-cell">${formatPrice(r.price)}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-bold text-xs sm:text-sm whitespace-nowrap">${r.momentum_score}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap"><div class="flex items-center gap-0.5 sm:gap-1">${status || '<span class="text-slate-300 dark:text-gray-600">-</span>'}</div></td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell ${sqClass}">${sqScore != null ? sqScore.toFixed(1) : '-'}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden lg:table-cell ${retClass(t.ret_1d)}">${t.ret_1d > 0 ? '+' : ''}${t.ret_1d}%</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden lg:table-cell ${retClass(t.ret_1w)}">${t.ret_1w > 0 ? '+' : ''}${t.ret_1w}%</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap ${retClass(t.ret_1m)}">${t.ret_1m > 0 ? '+' : ''}${t.ret_1m}%</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell ${retClass(t.ret_3m)}">${t.ret_3m > 0 ? '+' : ''}${t.ret_3m}%</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell ${rsiClass}">${t.rsi}</td>
+      <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap hidden lg:table-cell">${t.vol_ratio}x</td>
+      <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap hidden lg:table-cell ${retClass(t.rs_1m)}">${t.rs_1m != null ? (t.rs_1m > 0 ? '+' : '') + t.rs_1m + '%' : '-'}</td>
+      <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap hidden lg:table-cell ${retClass(t.rs_3m)}">${t.rs_3m != null ? (t.rs_3m > 0 ? '+' : '') + t.rs_3m + '%' : '-'}</td>
     </tr>`;
   }).join('');
 }
