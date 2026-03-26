@@ -5,7 +5,7 @@ from flask import Flask, jsonify, render_template, request
 
 from screener import run_screening
 from database import (
-    init_db, save_session, save_results,
+    init_db, save_session, save_results, save_value_gap_results,
     get_sessions, get_session_results,
     add_to_watchlist, remove_from_watchlist, get_watchlist,
     save_breadth, get_breadth,
@@ -82,6 +82,8 @@ def _run_single_index(index, top_n):
         "generated_at": result["generated_at"],
     })
     save_results(session_id, result["momentum_ranking"])
+    if result.get("value_gap_ranking"):
+        save_value_gap_results(session_id, result["value_gap_ranking"])
 
     # Save market breadth history
     if result.get("breadth"):
@@ -107,6 +109,8 @@ def _run_all_indices(top_n):
             "generated_at": result["generated_at"],
         })
         save_results(session_id, result["momentum_ranking"])
+        if result.get("value_gap_ranking"):
+            save_value_gap_results(session_id, result["value_gap_ranking"])
 
         # Save market breadth history
         if result.get("breadth"):
