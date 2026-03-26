@@ -287,7 +287,65 @@ def screen_momentum(tickers, sectors, progress_cb=None, is_japan=False):
         except Exception:
             continue
 
-    return results
+    return results, data
+
+
+def compute_breadth(data, tickers):
+    """Compute daily advance/decline counts and cumulative ADL from price data.
+
+    Args:
+        data: yfinance DataFrame (multi-ticker or single).
+        tickers: list of ticker symbols.
+
+    Returns:
+        list of dicts with keys: date, advances, declines, unchanged, ad_diff, adl, breadth_pct
+    """
+    # Build a DataFrame of daily Close prices for all tickers
+    closes = {}
+    for ticker in tickers:
+        try:
+            if len(tickers) > 1:
+                s = data[ticker]["Close"].dropna()
+            else:
+                s = data["Close"].dropna()
+            closes[ticker] = s
+        except Exception:
+            continue
+
+    if not closes:
+        return []
+
+    close_df = pd.DataFrame(closes)
+    # Daily returns: positive = advance, negative = decline
+    daily_ret = close_df.pct_change()
+    # Drop first row (NaN from pct_change)
+    daily_ret = daily_ret.iloc[1:]
+
+    breadth_data = []
+    adl = 0.0
+
+    for date_idx, row in daily_ret.iterrows():
+        valid = row.dropna()
+        advances = int((valid > 0).sum())
+        declines = int((valid < 0).sum())
+        unchanged = int((valid == 0).sum())
+        ad_diff = advances - declines
+        adl += ad_diff
+        total = advances + declines + unchanged
+        breadth_pct = round((advances - declines) / total * 100, 1) if total > 0 else 0
+
+        date_str = date_idx.strftime("%Y-%m-%d") if hasattr(date_idx, "strftime") else str(date_idx)
+        breadth_data.append({
+            "date": date_str,
+            "advances": advances,
+            "declines": declines,
+            "unchanged": unchanged,
+            "ad_diff": ad_diff,
+            "adl": round(adl, 1),
+            "breadth_pct": breadth_pct,
+        })
+
+    return breadth_data
 
 
 def compute_momentum_score(results):
@@ -408,7 +466,10 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
     if progress_cb:
         progress_cb(f"Found {len(tickers)} tickers", 5)
 
-    results = screen_momentum(tickers, sectors, progress_cb, is_japan=is_japan)
+    results, price_data = screen_momentum(tickers, sectors, progress_cb, is_japan=is_japan)
+
+    # Compute market breadth (ADL) from raw price data
+    breadth_data = compute_breadth(price_data, tickers)
 
     if progress_cb:
         progress_cb("Computing scores...", 68)
@@ -503,6 +564,9 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
     if progress_cb:
         progress_cb("Complete!", 100)
 
+    # Latest breadth snapshot for summary card
+    latest_breadth = breadth_data[-1] if breadth_data else {"advances": 0, "declines": 0, "breadth_pct": 0}
+
     return {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "index": {"sp500": "S&P 500", "nasdaq100": "NASDAQ 100", "nikkei225": "日経225"}.get(index, index.upper()),
@@ -517,4 +581,6 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
         "sector_distribution": top_sectors,
         "all_sectors": sector_counts,
         "momentum_ranking": ranking,
+        "breadth": breadth_data,
+        "latest_breadth": latest_breadth,
     }

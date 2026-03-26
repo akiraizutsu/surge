@@ -71,6 +71,19 @@ def init_db():
                 squeeze_score REAL
             );
 
+            CREATE TABLE IF NOT EXISTS market_breadth (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                index_name TEXT NOT NULL,
+                date TEXT NOT NULL,
+                advances INTEGER,
+                declines INTEGER,
+                unchanged INTEGER,
+                ad_diff INTEGER,
+                adl REAL,
+                breadth_pct REAL,
+                UNIQUE(index_name, date)
+            );
+
             CREATE TABLE IF NOT EXISTS watchlist (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ticker TEXT NOT NULL UNIQUE,
@@ -150,6 +163,37 @@ def get_session_results(session_id):
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ── Market Breadth ──
+
+def save_breadth(index_name, records):
+    """Save daily breadth data. Uses INSERT OR REPLACE to update existing dates."""
+    conn = _connect()
+    with conn:
+        for r in records:
+            conn.execute(
+                """INSERT OR REPLACE INTO market_breadth
+                   (index_name, date, advances, declines, unchanged, ad_diff, adl, breadth_pct)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (index_name, r["date"], r["advances"], r["declines"],
+                 r["unchanged"], r["ad_diff"], r["adl"], r["breadth_pct"]),
+            )
+    conn.close()
+
+
+def get_breadth(index_name, days=60):
+    """Get recent breadth history for an index."""
+    conn = _connect()
+    rows = conn.execute(
+        """SELECT date, advances, declines, unchanged, ad_diff, adl, breadth_pct
+           FROM market_breadth
+           WHERE index_name = ?
+           ORDER BY date DESC LIMIT ?""",
+        (index_name, days),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in reversed(rows)]
 
 
 # ── Watchlist ──
