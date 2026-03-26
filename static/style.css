@@ -35,9 +35,15 @@ header h1 {
 .card {
   background: white;
   border-radius: 0.75rem;
-  padding: 1.5rem;
+  padding: 1rem;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   border: 1px solid #e2e8f0;
+}
+
+@media (min-width: 640px) {
+  .card {
+    padding: 1.5rem;
+  }
 }
 
 .dark .card {
@@ -157,4 +163,23 @@ canvas {
 
 .dark ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
+}
+
+/* Mobile table: smaller text, tighter padding */
+@media (max-width: 639px) {
+  #tableArea table {
+    font-size: 0.75rem;
+  }
+  #tableArea th,
+  #tableArea td {
+    padding-left: 0.375rem;
+    padding-right: 0.375rem;
+  }
+}
+
+/* Touch-friendly tap targets on mobile */
+@media (max-width: 639px) {
+  .sortable {
+    min-height: 2.5rem;
+  }
 }
