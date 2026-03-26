@@ -3,7 +3,9 @@
 import os
 import sqlite3
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "surge.db")
+# Railway Volume: mount at /data, fallback to local for dev
+_data_dir = os.environ.get("DATA_DIR", os.path.dirname(__file__))
+DB_PATH = os.path.join(_data_dir, "surge.db")
 
 
 def _connect():
