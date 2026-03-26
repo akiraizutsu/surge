@@ -9,6 +9,7 @@ from database import (
     get_sessions, get_session_results,
     add_to_watchlist, remove_from_watchlist, get_watchlist,
     save_breadth, get_breadth,
+    get_latest_sessions_by_index,
 )
 
 app = Flask(__name__)
@@ -141,12 +142,18 @@ def start_screening():
 @app.get("/api/status")
 def get_status():
     with _lock:
+        has_result = _state["result"] is not None
+    # Check DB if memory is empty and not currently running
+    if not has_result and not _state["running"]:
+        db_results = get_latest_sessions_by_index()
+        has_result = bool(db_results)
+    with _lock:
         return jsonify({
             "running": _state["running"],
             "progress_message": _state["progress_message"],
             "progress_pct": _state["progress_pct"],
             "error": _state["error"],
-            "has_result": _state["result"] is not None,
+            "has_result": has_result,
         })
 
 
@@ -160,11 +167,22 @@ def get_result():
 
 @app.get("/api/results")
 def get_all_results():
-    """Get results for all screened indices."""
+    """Get results for all screened indices. Falls back to DB if memory is empty."""
     with _lock:
-        if not _state["results"]:
-            return jsonify({"error": "No results available"}), 404
-        return jsonify(_state["results"])
+        if _state["results"]:
+            return jsonify(_state["results"])
+
+    # Restore from DB after restart/deploy
+    db_results = get_latest_sessions_by_index()
+    if db_results:
+        with _lock:
+            _state["results"] = db_results
+            # Set latest as single result for backward compat
+            first_key = next(iter(db_results))
+            _state["result"] = db_results[first_key]
+        return jsonify(db_results)
+
+    return jsonify({"error": "No results available"}), 404
 
 
 # ── Watchlist ──
