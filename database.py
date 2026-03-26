@@ -71,6 +71,33 @@ def init_db():
                 squeeze_score REAL
             );
 
+            CREATE TABLE IF NOT EXISTS value_gap_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL REFERENCES screening_sessions(id),
+                rank INTEGER,
+                ticker TEXT,
+                name TEXT,
+                sector TEXT,
+                price REAL,
+                target_price REAL,
+                target_gap_pct REAL,
+                value_gap_score REAL,
+                ret_1m REAL,
+                ret_3m REAL,
+                rsi REAL,
+                pe_forward REAL,
+                pe_trailing REAL,
+                pb REAL,
+                eps_growth REAL,
+                revenue_growth REAL,
+                recommendation TEXT,
+                market_cap_b REAL,
+                dividend_yield REAL,
+                eps REAL,
+                ma50_dev REAL,
+                ma200_dev REAL
+            );
+
             CREATE TABLE IF NOT EXISTS market_breadth (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 index_name TEXT NOT NULL,
@@ -165,6 +192,30 @@ def get_session_results(session_id):
     return [dict(r) for r in rows]
 
 
+def save_value_gap_results(session_id, ranking):
+    conn = _connect()
+    with conn:
+        for r in ranking:
+            conn.execute(
+                """INSERT INTO value_gap_results (
+                    session_id, rank, ticker, name, sector, price, target_price,
+                    target_gap_pct, value_gap_score, ret_1m, ret_3m, rsi,
+                    pe_forward, pe_trailing, pb, eps_growth, revenue_growth,
+                    recommendation, market_cap_b, dividend_yield, eps, ma50_dev, ma200_dev
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (session_id, r.get("rank"), r.get("ticker"), r.get("name"),
+                 r.get("sector"), r.get("price"), r.get("target_price"),
+                 r.get("target_gap_pct"), r.get("value_gap_score"),
+                 r.get("ret_1m"), r.get("ret_3m"), r.get("rsi"),
+                 r.get("pe_forward"), r.get("pe_trailing"), r.get("pb"),
+                 r.get("eps_growth"), r.get("revenue_growth"),
+                 r.get("recommendation"), r.get("market_cap_b"),
+                 r.get("dividend_yield"), r.get("eps"),
+                 r.get("ma50_dev"), r.get("ma200_dev")),
+            )
+    conn.close()
+
+
 def get_latest_sessions_by_index():
     """Get the most recent session for each index, with full results."""
     conn = _connect()
@@ -247,12 +298,20 @@ def get_latest_sessions_by_index():
             "breadth_pct": breadth_rows["breadth_pct"],
         } if breadth_rows else {"advances": 0, "declines": 0, "breadth_pct": 0}
 
+        # Value gap results
+        vg_rows = conn.execute(
+            "SELECT * FROM value_gap_results WHERE session_id = ? ORDER BY rank",
+            (session["id"],),
+        ).fetchall()
+        vg_ranking = [dict(r) for r in vg_rows] if vg_rows else []
+
         index_label = {"sp500": "S&P 500", "nasdaq100": "NASDAQ 100", "nikkei225": "日経225"}[idx]
         results[idx] = {
             "index": index_label,
             "total_screened": session["total_screened"],
             "generated_at": session["generated_at"],
             "momentum_ranking": ranking,
+            "value_gap_ranking": vg_ranking,
             "sector_distribution": sector_dist,
             "summary": {
                 "avg_score": avg_score,

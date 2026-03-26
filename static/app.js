@@ -7,6 +7,7 @@ let screeningData = null;
 let allResults = {};  // {sp500: data, nasdaq100: data, nikkei225: data}
 let sortKey = 'rank';
 let sortAsc = true;
+let activeSubTab = 'momentum';
 let pollTimer = null;
 let watchlistTickers = new Set();
 let showWatchlistOnly = false;
@@ -216,9 +217,14 @@ function renderDashboard(data) {
   // ADL chart
   loadBreadthChart(activeTab);
 
-  // Table
-  document.getElementById('tableArea').classList.remove('hidden');
-  renderTable(data.momentum_ranking);
+  // Sub-tabs and tables
+  const hasContrarian = data.value_gap_ranking && data.value_gap_ranking.length > 0;
+  if (hasContrarian) {
+    document.getElementById('subTabs').classList.remove('hidden');
+  } else {
+    document.getElementById('subTabs').classList.add('hidden');
+  }
+  switchSubTab(activeSubTab);
 }
 
 function renderCharts(data) {
@@ -342,6 +348,119 @@ function renderCharts(data) {
       }
     }
   });
+}
+
+// ── Sub-tab Switching ──
+function switchSubTab(tab) {
+  activeSubTab = tab;
+  document.querySelectorAll('#subTabs .index-tab').forEach(btn => btn.classList.remove('active'));
+  if (tab === 'momentum') {
+    document.getElementById('subTabMomentum').classList.add('active');
+    document.getElementById('tableArea').classList.remove('hidden');
+    document.getElementById('contrarianTableArea').classList.add('hidden');
+    if (screeningData) renderTable(screeningData.momentum_ranking);
+  } else {
+    document.getElementById('subTabContrarian').classList.add('active');
+    document.getElementById('tableArea').classList.add('hidden');
+    document.getElementById('contrarianTableArea').classList.remove('hidden');
+    if (screeningData && screeningData.value_gap_ranking) {
+      renderContrarianTable(screeningData.value_gap_ranking);
+    }
+  }
+}
+
+// ── Contrarian Table ──
+function renderContrarianTable(ranking) {
+  const tbody = document.getElementById('contrarianTableBody');
+  const retClass = (v) => v > 0 ? 'text-emerald-600 dark:text-emerald-400' : v < 0 ? 'text-rose-400 dark:text-rose-300' : '';
+  const fmtPct = (v) => v != null ? (v > 0 ? '+' : '') + v + '%' : '-';
+
+  tbody.innerHTML = ranking.map(r => {
+    const recMap = { strong_buy: '強い買い', buy: '買い', hold: '中立', sell: '売り', strong_sell: '強い売り' };
+    const recLabel = recMap[r.recommendation] || r.recommendation || '-';
+    const recClass = (r.recommendation === 'buy' || r.recommendation === 'strong_buy')
+      ? 'text-emerald-600 dark:text-emerald-400 font-medium' : '';
+
+    return `<tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors" onclick='showContrarianDetail(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-slate-400 text-xs sm:text-sm whitespace-nowrap">${r.rank}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 font-semibold text-primary-600 dark:text-primary-400 text-xs sm:text-sm whitespace-nowrap">${r.ticker}</td>
+      <td class="px-4 py-3 text-slate-500 dark:text-gray-400 hidden lg:table-cell text-xs max-w-[180px] truncate">${r.name}</td>
+      <td class="px-4 py-3 text-xs text-slate-600 dark:text-gray-400 whitespace-nowrap hidden md:table-cell">${r.sector}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-bold text-xs sm:text-sm whitespace-nowrap">${r.value_gap_score}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell">${formatPrice(r.price)}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell">${formatPrice(r.target_price)}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap text-emerald-600 dark:text-emerald-400 font-semibold">+${r.target_gap_pct}%</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap ${retClass(r.ret_1m)}">${fmtPct(r.ret_1m)}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell">${r.rsi}</td>
+      <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap hidden lg:table-cell">${r.pe_forward || '-'}</td>
+      <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap hidden lg:table-cell ${retClass(r.eps_growth)}">${fmtPct(r.eps_growth)}</td>
+      <td class="px-4 py-3 text-right font-mono text-sm whitespace-nowrap hidden lg:table-cell ${retClass(r.revenue_growth)}">${fmtPct(r.revenue_growth)}</td>
+      <td class="px-4 py-3 text-center text-xs whitespace-nowrap hidden sm:table-cell ${recClass}">${recLabel}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Contrarian Detail Modal ──
+function showContrarianDetail(stock) {
+  document.getElementById('modalTitle').textContent = `${stock.ticker} - ${stock.name}`;
+  const fmtPct = (v) => v != null ? (v > 0 ? '+' : '') + v + '%' : '-';
+  const fmtVal = (v) => v != null && v !== 0 ? v : '-';
+  const recMap = { strong_buy: '強い買い', buy: '買い', hold: '中立', sell: '売り', strong_sell: '強い売り' };
+
+  document.getElementById('modalContent').innerHTML = `
+    <div class="grid grid-cols-2 gap-4 mb-6">
+      <div class="bg-amber-50 dark:bg-amber-950/30 rounded-xl p-4">
+        <div class="text-xs text-slate-500 dark:text-gray-400">バリュー乖離スコア</div>
+        <div class="text-3xl font-bold text-amber-600 dark:text-amber-400">${stock.value_gap_score}</div>
+      </div>
+      <div class="bg-emerald-50 dark:bg-emerald-950/30 rounded-xl p-4">
+        <div class="text-xs text-slate-500 dark:text-gray-400">目標株価との乖離</div>
+        <div class="text-3xl font-bold text-emerald-600 dark:text-emerald-400">+${stock.target_gap_pct}%</div>
+      </div>
+    </div>
+
+    <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">株価情報</h3>
+    <div class="grid grid-cols-3 gap-3 mb-6">
+      ${[
+        ['現在株価', formatPrice(stock.price)],
+        ['目標株価', formatPrice(stock.target_price)],
+        ['セクター', stock.sector],
+        ['1ヶ月', fmtPct(stock.ret_1m)],
+        ['3ヶ月', fmtPct(stock.ret_3m)],
+        ['RSI', stock.rsi],
+        ['50日MA乖離', fmtPct(stock.ma50_dev)],
+        ['200日MA乖離', fmtPct(stock.ma200_dev)],
+        ['アナリスト推奨', recMap[stock.recommendation] || '-'],
+      ].map(([label, val]) => `
+        <div class="bg-slate-50 dark:bg-gray-800 rounded-lg p-2.5 text-center border border-slate-100 dark:border-gray-700">
+          <div class="text-[10px] text-slate-400 dark:text-gray-500">${label}</div>
+          <div class="font-semibold text-sm text-slate-900 dark:text-gray-100">${val}</div>
+        </div>
+      `).join('')}
+    </div>
+
+    <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">ファンダメンタルズ</h3>
+    <div class="grid grid-cols-3 gap-3">
+      ${[
+        ['時価総額', stock.market_cap_b ? (isJapanIndex() ? '¥' : '$') + stock.market_cap_b + 'B' : '-'],
+        ['PER (予想)', fmtVal(stock.pe_forward)],
+        ['PER (実績)', fmtVal(stock.pe_trailing)],
+        ['PBR', fmtVal(stock.pb)],
+        ['EPS', fmtVal(stock.eps)],
+        ['配当利回り', stock.dividend_yield ? stock.dividend_yield + '%' : '-'],
+        ['EPS成長率', fmtPct(stock.eps_growth)],
+        ['売上成長率', fmtPct(stock.revenue_growth)],
+      ].map(([label, val]) => `
+        <div class="bg-slate-50 dark:bg-gray-800 rounded-lg p-2.5 text-center border border-slate-100 dark:border-gray-700">
+          <div class="text-[10px] text-slate-400 dark:text-gray-500">${label}</div>
+          <div class="font-semibold text-sm text-slate-900 dark:text-gray-100">${val}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  document.getElementById('modal').classList.remove('hidden');
+  document.getElementById('modal').classList.add('flex');
 }
 
 // ── Breadth Chart ──

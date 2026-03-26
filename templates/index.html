@@ -172,6 +172,18 @@
       </div>
     </div>
 
+    <!-- Sub-tabs: Momentum / Contrarian -->
+    <div id="subTabs" class="hidden flex bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-1 gap-1">
+      <button id="subTabMomentum" onclick="switchSubTab('momentum')"
+        class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab active">
+        モメンタム
+      </button>
+      <button id="subTabContrarian" onclick="switchSubTab('contrarian')"
+        class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
+        逆張り候補
+      </button>
+    </div>
+
     <!-- Table -->
     <div id="tableArea" class="hidden">
       <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-x-auto">
@@ -198,6 +210,33 @@
             </tr>
           </thead>
           <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Contrarian Table -->
+    <div id="contrarianTableArea" class="hidden">
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50">
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">#</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">銘柄</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider hidden lg:table-cell">名称</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden md:table-cell">セクター</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">VGスコア</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">株価</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">目標株価</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">乖離</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">1M</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">RSI</th>
+              <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden lg:table-cell">PER予</th>
+              <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden lg:table-cell">EPS成長</th>
+              <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden lg:table-cell">売上成長</th>
+              <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">推奨</th>
+            </tr>
+          </thead>
+          <tbody id="contrarianTableBody"></tbody>
         </table>
       </div>
     </div>

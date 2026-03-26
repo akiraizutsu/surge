@@ -448,6 +448,130 @@ def compute_squeeze_score(ranking):
     return df
 
 
+def compute_value_gap(all_results, fundamentals_list, is_japan=False):
+    """Identify contrarian candidates: stocks sold off despite strong fundamentals.
+
+    Criteria for candidates:
+    - Target price > current price by 15%+ (analyst upside)
+    - 1M return is negative (being sold off)
+    - EPS growth or revenue growth is positive (fundamentals intact)
+
+    Score = weighted percentile rank of:
+    - Target gap %    (30%)
+    - Forward PE low  (20%)
+    - EPS growth      (20%)
+    - Revenue growth  (15%)
+    - Analyst rating  (15%)
+    """
+    fund_map = {f["ticker"]: f for f in fundamentals_list if not f.get("error")}
+
+    candidates = []
+    for r in all_results:
+        ticker = r["ticker"]
+        fund = fund_map.get(ticker, {})
+        target = fund.get("target_price", 0) or 0
+        price = r["price"]
+        if not price or price <= 0 or not target or target <= 0:
+            continue
+
+        target_gap_pct = round((target - price) / price * 100, 1)
+        ret_1m = r.get("ret_1m", 0) or 0
+        eps_growth = fund.get("earnings_growth", 0) or 0
+        rev_growth = fund.get("revenue_growth", 0) or 0
+        pe_forward = fund.get("pe_forward", 0) or 0
+        recommendation = fund.get("recommendation", "N/A")
+
+        # Filter: must have upside, be declining, and have some growth
+        if target_gap_pct < 15:
+            continue
+        if ret_1m >= 0:
+            continue
+        if eps_growth <= 0 and rev_growth <= 0:
+            continue
+
+        # Recommendation score
+        rec_score_map = {"strong_buy": 5, "buy": 4, "hold": 3, "sell": 2, "strong_sell": 1}
+        rec_num = rec_score_map.get(recommendation, 3)
+
+        candidates.append({
+            "ticker": ticker,
+            "name": fund.get("short_name", ticker),
+            "sector": r.get("sector", ""),
+            "price": price,
+            "target_price": target,
+            "target_gap_pct": target_gap_pct,
+            "ret_1m": ret_1m,
+            "ret_3m": r.get("ret_3m", 0),
+            "rsi": r.get("rsi", 50),
+            "pe_forward": pe_forward,
+            "eps_growth": eps_growth,
+            "revenue_growth": rev_growth,
+            "recommendation": recommendation,
+            "rec_num": rec_num,
+            "market_cap_b": fund.get("market_cap_b", 0),
+            "pe_trailing": fund.get("pe_trailing", 0),
+            "pb": fund.get("pb", 0),
+            "dividend_yield": fund.get("dividend_yield", 0),
+            "eps": fund.get("eps", 0),
+            "ma50_dev": r.get("ma50_dev", 0),
+            "ma200_dev": r.get("ma200_dev", 0),
+        })
+
+    if len(candidates) < 2:
+        # Add score=0 and return what we have
+        for c in candidates:
+            c["value_gap_score"] = 50.0
+        return candidates
+
+    # Percentile ranking for score
+    cdf = pd.DataFrame(candidates)
+    cdf["s_gap"] = cdf["target_gap_pct"].rank(pct=True)
+    # Lower forward PE = more undervalued (invert rank)
+    cdf["s_pe"] = 1 - cdf["pe_forward"].rank(pct=True) if (cdf["pe_forward"] > 0).any() else 0.5
+    cdf["s_eps"] = cdf["eps_growth"].rank(pct=True)
+    cdf["s_rev"] = cdf["revenue_growth"].rank(pct=True)
+    cdf["s_rec"] = cdf["rec_num"].rank(pct=True)
+
+    cdf["value_gap_score"] = (
+        cdf["s_gap"] * 0.30
+        + cdf["s_pe"] * 0.20
+        + cdf["s_eps"] * 0.20
+        + cdf["s_rev"] * 0.15
+        + cdf["s_rec"] * 0.15
+    ) * 100
+
+    cdf = cdf.sort_values("value_gap_score", ascending=False)
+
+    result = []
+    for rank_idx, (_, row) in enumerate(cdf.iterrows(), 1):
+        result.append({
+            "rank": rank_idx,
+            "ticker": row["ticker"],
+            "name": row["name"],
+            "sector": row["sector"],
+            "price": row["price"],
+            "target_price": row["target_price"],
+            "target_gap_pct": row["target_gap_pct"],
+            "value_gap_score": round(row["value_gap_score"], 1),
+            "ret_1m": row["ret_1m"],
+            "ret_3m": row["ret_3m"],
+            "rsi": row["rsi"],
+            "pe_forward": row["pe_forward"],
+            "pe_trailing": row["pe_trailing"],
+            "pb": row["pb"],
+            "eps_growth": row["eps_growth"],
+            "revenue_growth": row["revenue_growth"],
+            "recommendation": row["recommendation"],
+            "market_cap_b": row["market_cap_b"],
+            "dividend_yield": row["dividend_yield"],
+            "eps": row["eps"],
+            "ma50_dev": row["ma50_dev"],
+            "ma200_dev": row["ma200_dev"],
+        })
+
+    return result
+
+
 def run_screening(index="sp500", top_n=20, progress_cb=None):
     """Run full screening pipeline. Returns dict with results."""
     if progress_cb:
@@ -538,6 +662,20 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
             "squeeze_score": None,
         })
 
+    # Compute value gap (contrarian) candidates
+    # Get fundamentals for declining stocks (1M return < 0) that aren't already in top_tickers
+    declining_tickers = [r["ticker"] for r in results if (r.get("ret_1m", 0) or 0) < 0 and r["ticker"] not in top_tickers]
+    # Limit to avoid excessive API calls — take worst performers first
+    declining_tickers.sort(key=lambda t: next((r["ret_1m"] for r in results if r["ticker"] == t), 0))
+    declining_tickers = declining_tickers[:50]
+
+    if progress_cb:
+        progress_cb("Fetching contrarian fundamentals...", 92)
+
+    declining_fund = get_fundamentals(declining_tickers, is_japan=is_japan)
+    all_fund_for_gap = fundamentals + declining_fund
+    value_gap_ranking = compute_value_gap(results, all_fund_for_gap, is_japan=is_japan)
+
     # Compute squeeze scores
     sq_df = compute_squeeze_score(
         [{"short_pct_of_float": r["short_interest"]["short_pct_of_float"],
@@ -581,6 +719,7 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
         "sector_distribution": top_sectors,
         "all_sectors": sector_counts,
         "momentum_ranking": ranking,
+        "value_gap_ranking": value_gap_ranking[:20],
         "breadth": breadth_data,
         "latest_breadth": latest_breadth,
     }
