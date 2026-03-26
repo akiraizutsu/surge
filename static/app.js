@@ -379,9 +379,9 @@ function renderBreadthChart(breadthData) {
         {
           label: 'ADL (累積)',
           data: adlValues,
-          borderColor: getPrimaryColor(50),
-          backgroundColor: getPrimaryColor(50) + '20',
-          fill: true,
+          borderColor: getPrimaryColor(45),
+          backgroundColor: 'transparent',
+          fill: false,
           tension: 0.3,
           pointRadius: 0,
           pointHitRadius: 8,
