@@ -8,6 +8,7 @@ from database import (
     init_db, save_session, save_results,
     get_sessions, get_session_results,
     add_to_watchlist, remove_from_watchlist, get_watchlist,
+    save_breadth, get_breadth,
 )
 
 app = Flask(__name__)
@@ -81,6 +82,10 @@ def _run_single_index(index, top_n):
     })
     save_results(session_id, result["momentum_ranking"])
 
+    # Save market breadth history
+    if result.get("breadth"):
+        save_breadth(index, result["breadth"])
+
 
 def _run_all_indices(top_n):
     span_per = 100 // len(ALL_INDICES)
@@ -101,6 +106,10 @@ def _run_all_indices(top_n):
             "generated_at": result["generated_at"],
         })
         save_results(session_id, result["momentum_ranking"])
+
+        # Save market breadth history
+        if result.get("breadth"):
+            save_breadth(idx, result["breadth"])
 
 
 @app.route("/")
@@ -179,6 +188,16 @@ def api_add_watchlist():
 def api_remove_watchlist(ticker):
     remove_from_watchlist(ticker.upper())
     return jsonify({"status": "removed", "ticker": ticker.upper()})
+
+
+# ── Breadth ──
+
+@app.get("/api/breadth/<index_name>")
+def api_get_breadth(index_name):
+    if index_name not in ("sp500", "nasdaq100", "nikkei225"):
+        return jsonify({"error": "Invalid index"}), 400
+    data = get_breadth(index_name, days=90)
+    return jsonify({"index_name": index_name, "data": data})
 
 
 # ── History ──

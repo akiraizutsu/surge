@@ -15,6 +15,7 @@ let showWatchlistOnly = false;
 let chartBar = null;
 let chartDoughnut = null;
 let chartScatter = null;
+let chartBreadth = null;
 
 // ── Color System ──
 function hexToHsl(hex) {
@@ -197,10 +198,23 @@ function renderDashboard(data) {
   document.getElementById('cardOverheat').textContent = data.summary.overheat_count;
   document.getElementById('cardGolden').textContent = data.summary.golden_cross_count;
 
+  // Breadth card
+  const lb = data.latest_breadth;
+  if (lb) {
+    const pct = lb.breadth_pct;
+    const pctColor = pct > 0 ? 'text-emerald-500' : pct < 0 ? 'text-rose-400' : 'text-primary-600 dark:text-primary-400';
+    document.getElementById('cardBreadth').className = `text-2xl font-bold ${pctColor}`;
+    document.getElementById('cardBreadth').textContent = (pct > 0 ? '+' : '') + pct + '%';
+    document.getElementById('cardBreadthDetail').textContent = `${lb.advances}↑ / ${lb.declines}↓`;
+  }
+
   // Charts
   document.getElementById('chartsArea').classList.remove('hidden');
   document.getElementById('rsiChartArea').classList.remove('hidden');
   renderCharts(data);
+
+  // ADL chart
+  loadBreadthChart(activeTab);
 
   // Table
   document.getElementById('tableArea').classList.remove('hidden');
@@ -323,6 +337,105 @@ function renderCharts(data) {
         y: {
           title: { display: true, text: '1ヶ月リターン (%)', color: textColor },
           grid: { color: gridColor },
+          ticks: { color: textColor },
+        }
+      }
+    }
+  });
+}
+
+// ── Breadth Chart ──
+async function loadBreadthChart(index) {
+  try {
+    const resp = await fetch(`/api/breadth/${index}`);
+    if (!resp.ok) return;
+    const json = await resp.json();
+    if (json.data && json.data.length > 0) {
+      document.getElementById('breadthChartArea').classList.remove('hidden');
+      renderBreadthChart(json.data);
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function renderBreadthChart(breadthData) {
+  const isDark = document.documentElement.classList.contains('dark');
+  const textColor = isDark ? '#9ca3af' : '#6b7280';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+
+  // Use last 90 days
+  const recent = breadthData.slice(-90);
+  const labels = recent.map(d => d.date);
+  const adlValues = recent.map(d => d.adl);
+  const diffValues = recent.map(d => d.ad_diff);
+
+  const ctx = document.getElementById('chartBreadth').getContext('2d');
+  if (chartBreadth) chartBreadth.destroy();
+
+  chartBreadth = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'ADL (累積)',
+          data: adlValues,
+          borderColor: getPrimaryColor(50),
+          backgroundColor: getPrimaryColor(50) + '20',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 0,
+          pointHitRadius: 8,
+          borderWidth: 2,
+          yAxisID: 'y',
+        },
+        {
+          label: '日次 AD差分',
+          data: diffValues,
+          type: 'bar',
+          backgroundColor: diffValues.map(v => v >= 0 ? 'rgba(52,211,153,0.4)' : 'rgba(251,113,133,0.4)'),
+          borderWidth: 0,
+          yAxisID: 'y1',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: textColor, font: { size: 11 } }
+        },
+        tooltip: {
+          callbacks: {
+            afterBody: (items) => {
+              const idx = items[0]?.dataIndex;
+              if (idx == null) return '';
+              const d = recent[idx];
+              return `上昇: ${d.advances} / 下降: ${d.declines} (${d.breadth_pct > 0 ? '+' : ''}${d.breadth_pct}%)`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: {
+            color: textColor,
+            maxTicksLimit: 12,
+            font: { size: 10 },
+          },
+        },
+        y: {
+          position: 'left',
+          title: { display: true, text: 'ADL', color: textColor },
+          grid: { color: gridColor },
+          ticks: { color: textColor },
+        },
+        y1: {
+          position: 'right',
+          title: { display: true, text: '日次 AD', color: textColor },
+          grid: { display: false },
           ticks: { color: textColor },
         }
       }

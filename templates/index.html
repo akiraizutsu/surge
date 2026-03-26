@@ -118,7 +118,7 @@
     </div>
 
     <!-- Summary Cards -->
-    <div id="summaryCards" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div id="summaryCards" class="hidden grid grid-cols-2 md:grid-cols-5 gap-4">
       <div class="card">
         <div class="text-sm text-slate-500 dark:text-gray-400">分析銘柄数</div>
         <div id="cardScreened" class="text-2xl font-bold text-primary-600 dark:text-primary-400">-</div>
@@ -126,6 +126,11 @@
       <div class="card">
         <div class="text-sm text-slate-500 dark:text-gray-400">平均スコア</div>
         <div id="cardAvgScore" class="text-2xl font-bold text-primary-600 dark:text-primary-400">-</div>
+      </div>
+      <div class="card">
+        <div class="text-sm text-slate-500 dark:text-gray-400">騰落比率</div>
+        <div id="cardBreadth" class="text-2xl font-bold text-primary-600 dark:text-primary-400">-</div>
+        <div id="cardBreadthDetail" class="text-xs text-slate-400 dark:text-gray-500 mt-1"></div>
       </div>
       <div class="card">
         <div class="text-sm text-slate-500 dark:text-gray-400">過熱銘柄 (RSI&gt;70)</div>
@@ -159,6 +164,16 @@
         <h3 class="text-sm font-medium text-slate-500 dark:text-gray-400 mb-4">RSI vs 1ヶ月リターン</h3>
         <div class="relative" style="height: 350px">
           <canvas id="chartScatter"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Breadth Chart (ADL) -->
+    <div id="breadthChartArea" class="hidden">
+      <div class="card">
+        <h3 class="text-sm font-medium text-slate-500 dark:text-gray-400 mb-4">騰落線 (Advance-Decline Line)</h3>
+        <div class="relative" style="height: 300px">
+          <canvas id="chartBreadth"></canvas>
         </div>
       </div>
     </div>
