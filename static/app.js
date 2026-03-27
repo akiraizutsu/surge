@@ -219,13 +219,13 @@ function renderDashboard(data) {
   // ADL chart
   loadBreadthChart(activeTab);
 
-  // Sub-tabs and tables
+  // Sub-tabs and tables — always show; hide contrarian tab button if no data
+  document.getElementById('subTabs').classList.remove('hidden');
   const hasContrarian = data.value_gap_ranking && data.value_gap_ranking.length > 0;
-  if (hasContrarian) {
-    document.getElementById('subTabs').classList.remove('hidden');
-  } else {
-    document.getElementById('subTabs').classList.add('hidden');
-  }
+  const contrarianBtn = document.getElementById('subTabContrarian');
+  if (contrarianBtn) contrarianBtn.style.display = hasContrarian ? '' : 'none';
+  // If currently on contrarian but no data, fall back to momentum
+  if (!hasContrarian && activeSubTab === 'contrarian') activeSubTab = 'momentum';
   switchSubTab(activeSubTab);
 }
 
