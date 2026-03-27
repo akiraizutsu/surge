@@ -27,6 +27,8 @@ from database import (
     save_breadth, get_breadth,
     get_latest_sessions_by_index,
     save_cf_cache, get_cf_cache, clear_cf_cache,
+    get_edinet_cached_companies, save_edinet_companies,
+    get_edinet_cached_financials, save_edinet_financials,
 )
 
 app = Flask(__name__)

@@ -129,6 +129,15 @@ def init_db():
                 data TEXT NOT NULL,
                 fetched_at TEXT DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS edinet_company_cache (
+                sec_code TEXT PRIMARY KEY,
+                edinet_code TEXT,
+                industry TEXT,
+                fetched_at TEXT DEFAULT (datetime('now')),
+                latest_financials_json TEXT,
+                fin_fetched_at TEXT
+            );
         """)
     conn.close()
 
@@ -449,4 +458,93 @@ def clear_cf_cache(ticker):
     conn = _connect()
     with conn:
         conn.execute("DELETE FROM cf_cache WHERE ticker = ?", (ticker.upper(),))
+    conn.close()
+
+
+# ── EDINET company cache (sector / edinet_code / financials) ──
+
+def _ensure_edinet_columns(conn):
+    """Add new columns if they don't exist yet (migration safety)."""
+    existing = {r[1] for r in conn.execute("PRAGMA table_info(edinet_company_cache)").fetchall()}
+    if "latest_financials_json" not in existing:
+        conn.execute("ALTER TABLE edinet_company_cache ADD COLUMN latest_financials_json TEXT")
+    if "fin_fetched_at" not in existing:
+        conn.execute("ALTER TABLE edinet_company_cache ADD COLUMN fin_fetched_at TEXT")
+
+
+def get_edinet_cached_companies(sec_codes):
+    """Return {sec_code: {edinet_code, industry}} for entries cached within 90 days."""
+    if not sec_codes:
+        return {}
+    conn = _connect()
+    _ensure_edinet_columns(conn)
+    placeholders = ",".join("?" * len(sec_codes))
+    rows = conn.execute(
+        f"""SELECT sec_code, edinet_code, industry FROM edinet_company_cache
+            WHERE sec_code IN ({placeholders})
+            AND fetched_at >= datetime('now', '-90 days')""",
+        list(sec_codes),
+    ).fetchall()
+    conn.close()
+    return {r["sec_code"]: {"edinet_code": r["edinet_code"], "industry": r["industry"]} for r in rows}
+
+
+def get_edinet_cached_financials(sec_codes):
+    """Return {sec_code: financials_dict} for entries where fin_fetched_at within 30 days."""
+    if not sec_codes:
+        return {}
+    import json as _json
+    conn = _connect()
+    _ensure_edinet_columns(conn)
+    placeholders = ",".join("?" * len(sec_codes))
+    rows = conn.execute(
+        f"""SELECT sec_code, latest_financials_json FROM edinet_company_cache
+            WHERE sec_code IN ({placeholders})
+            AND fin_fetched_at >= datetime('now', '-30 days')
+            AND latest_financials_json IS NOT NULL""",
+        list(sec_codes),
+    ).fetchall()
+    conn.close()
+    result = {}
+    for r in rows:
+        try:
+            result[r["sec_code"]] = _json.loads(r["latest_financials_json"])
+        except Exception:
+            pass
+    return result
+
+
+def save_edinet_companies(entries):
+    """Upsert list of {sec_code, edinet_code, industry} into cache."""
+    if not entries:
+        return
+    conn = _connect()
+    _ensure_edinet_columns(conn)
+    with conn:
+        conn.executemany(
+            """INSERT INTO edinet_company_cache (sec_code, edinet_code, industry, fetched_at)
+               VALUES (:sec_code, :edinet_code, :industry, datetime('now'))
+               ON CONFLICT(sec_code) DO UPDATE SET
+                   edinet_code=excluded.edinet_code,
+                   industry=excluded.industry,
+                   fetched_at=excluded.fetched_at""",
+            entries,
+        )
+    conn.close()
+
+
+def save_edinet_financials(sec_code, financials_dict):
+    """Cache the latest annual financials dict for a sec_code (30-day TTL)."""
+    import json as _json
+    conn = _connect()
+    _ensure_edinet_columns(conn)
+    with conn:
+        conn.execute(
+            """INSERT INTO edinet_company_cache (sec_code, latest_financials_json, fin_fetched_at)
+               VALUES (?, ?, datetime('now'))
+               ON CONFLICT(sec_code) DO UPDATE SET
+                   latest_financials_json=excluded.latest_financials_json,
+                   fin_fetched_at=excluded.fin_fetched_at""",
+            (sec_code, _json.dumps(financials_dict, ensure_ascii=False)),
+        )
     conn.close()

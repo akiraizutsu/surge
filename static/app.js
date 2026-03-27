@@ -865,12 +865,18 @@ function showDetail(stock) {
         ['PER (実績)', fmtVal(f.pe_trailing)],
         ['PER (予想)', fmtVal(f.pe_forward)],
         ['PBR', fmtVal(f.pb)],
-        ['配当利回り', f.dividend_yield ? f.dividend_yield + '%' : '-'],
-        ['売上成長率', fmtPct(f.revenue_growth)],
-        ['EPS成長率', fmtPct(f.earnings_growth)],
+        ['配当利回り', f.dividend_yield ? (f.dividend_yield * 100).toFixed(2) + '%' : '-'],
         ['EPS', fmtVal(f.eps)],
-        ['目標株価', f.target_price ? (isJapanIndex() ? '¥' + Math.round(f.target_price).toLocaleString() : '$' + f.target_price) : '-'],
-        ['推奨', f.recommendation || '-'],
+        ...(isJapanIndex() ? [
+          ['ROE', f.roe != null ? (f.roe * 100).toFixed(1) + '%' : '-'],
+          ['売上高 (億円)', f.revenue_b != null ? f.revenue_b.toLocaleString() : '-'],
+          ['純利益 (億円)', f.net_income_b != null ? f.net_income_b.toLocaleString() : '-'],
+        ] : [
+          ['売上成長率', fmtPct(f.revenue_growth)],
+          ['EPS成長率', fmtPct(f.earnings_growth)],
+          ['目標株価', f.target_price ? '$' + f.target_price : '-'],
+          ['推奨', f.recommendation || '-'],
+        ]),
       ].map(([label, val]) => `
         <div class="bg-slate-50 dark:bg-gray-800 rounded-lg p-2.5 text-center border border-slate-100 dark:border-gray-700">
           <div class="text-[10px] text-slate-400 dark:text-gray-500">${label}</div>

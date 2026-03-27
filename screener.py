@@ -1,7 +1,9 @@
 """Momentum screening engine for S&P 500, NASDAQ 100, and Nikkei 225."""
 
 import io
+import os
 import warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -10,6 +12,187 @@ import requests
 import yfinance as yf
 
 warnings.filterwarnings("ignore")
+
+# ── EDINET DB helpers (for Nikkei 225 data enrichment) ───────────────────────
+_EDINET_BASE = "https://edinetdb.jp/v1"
+# Max new EDINET search API calls per screening run (free plan: 100/day)
+# Fundamentals calls (top_n) are added on top, so keep this ≤ 60.
+_EDINET_MAX_NEW_SEARCHES = 60
+
+
+def _edinet_search_api(sec_code, api_key):
+    """Single EDINET search API call. Returns {edinet_code, industry} or {}."""
+    try:
+        r = requests.get(
+            f"{_EDINET_BASE}/search",
+            params={"q": sec_code},
+            headers={"X-API-Key": api_key},
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return {}
+        for c in (r.json().get("data") or []):
+            sc = str(c.get("sec_code") or "")
+            if sc[:-1] == sec_code or sc == sec_code:
+                return {
+                    "edinet_code": c.get("edinet_code") or "",
+                    "industry": c.get("industry") or "",
+                }
+    except Exception:
+        pass
+    return {}
+
+
+def _edinet_latest_annual(edinet_code, api_key):
+    """Return the most recent annual financial record dict, or {}."""
+    try:
+        r = requests.get(
+            f"{_EDINET_BASE}/companies/{edinet_code}/financials",
+            headers={"X-API-Key": api_key},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            return {}
+        rows = r.json().get("data") or []
+        if not rows:
+            return {}
+        return sorted(rows, key=lambda x: x.get("fiscal_year") or 0)[-1]
+    except Exception:
+        return {}
+
+
+def get_edinet_sectors(tickers, api_key, progress_cb=None):
+    """Return {ticker: industry} using SQLite cache + limited EDINET API calls.
+
+    Cache TTL: 90 days. New API calls per run capped at _EDINET_MAX_NEW_SEARCHES.
+    """
+    from database import get_edinet_cached_companies, save_edinet_companies
+
+    sec_codes = [t.replace(".T", "") for t in tickers]
+    ticker_map = {t.replace(".T", ""): t for t in tickers}
+
+    # Load cached entries
+    cached = get_edinet_cached_companies(sec_codes)
+
+    # Determine which need fetching (not in cache), up to the per-run limit
+    uncached = [sc for sc in sec_codes if sc not in cached]
+    to_fetch = uncached[:_EDINET_MAX_NEW_SEARCHES]
+
+    # Fetch uncached ones in parallel
+    new_entries = []
+
+    def _fetch(sec_code):
+        return sec_code, _edinet_search_api(sec_code, api_key)
+
+    if to_fetch:
+        done = 0
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            futures = {pool.submit(_fetch, sc): sc for sc in to_fetch}
+            for future in as_completed(futures):
+                sc, info = future.result()
+                new_entries.append({
+                    "sec_code": sc,
+                    "edinet_code": info.get("edinet_code", ""),
+                    "industry": info.get("industry", ""),
+                })
+                cached[sc] = info  # merge into local cache
+                done += 1
+                if progress_cb and done % 20 == 0:
+                    pct = 3 + int(done / len(to_fetch) * 5)
+                    progress_cb(f"EDINETセクター取得 {done}/{len(to_fetch)}件...", pct)
+
+        save_edinet_companies(new_entries)
+
+    # Build result dict
+    result = {}
+    for sc, info in cached.items():
+        ind = info.get("industry", "")
+        if ind:
+            result[ticker_map[sc]] = ind
+    return result
+
+
+def get_edinet_fundamentals(tickers, api_key, price_map, progress_cb=None):
+    """Fetch latest annual fundamentals from EDINET for top_n JP tickers.
+
+    Uses SQLite cache for both edinet_code lookup and financial data (30-day TTL).
+    price_map: {ticker: current_price} for P/B and dividend yield calc.
+    Returns {ticker: {per, pb, eps, roe, dividend_yield, revenue_b, net_income_b}}.
+    """
+    from database import (
+        get_edinet_cached_companies, save_edinet_companies,
+        get_edinet_cached_financials, save_edinet_financials,
+    )
+
+    sec_codes = [t.replace(".T", "") for t in tickers]
+    ticker_map = {t.replace(".T", ""): t for t in tickers}
+
+    # Load edinet_code from company cache; fetch missing ones via API
+    company_cache = get_edinet_cached_companies(sec_codes)
+    missing_codes = [sc for sc in sec_codes if sc not in company_cache or not company_cache[sc].get("edinet_code")]
+    if missing_codes:
+        new_entries = []
+        for sc in missing_codes:
+            info = _edinet_search_api(sc, api_key)
+            new_entries.append({"sec_code": sc, "edinet_code": info.get("edinet_code", ""), "industry": info.get("industry", "")})
+            company_cache[sc] = info
+        save_edinet_companies(new_entries)
+
+    # Load financial data from cache; fetch missing ones via API
+    fin_cache = get_edinet_cached_financials(sec_codes)
+    need_fin = [sc for sc in sec_codes if sc not in fin_cache and (company_cache.get(sc) or {}).get("edinet_code")]
+
+    def _fetch_fin(sec_code):
+        edinet_code = (company_cache.get(sec_code) or {}).get("edinet_code", "")
+        return sec_code, _edinet_latest_annual(edinet_code, api_key)
+
+    if need_fin:
+        done = 0
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = {pool.submit(_fetch_fin, sc): sc for sc in need_fin}
+            for future in as_completed(futures):
+                sc, ann = future.result()
+                done += 1
+                if progress_cb:
+                    pct = 70 + int(done / len(need_fin) * 20)
+                    progress_cb(f"EDINETファンダメンタルズ {done}/{len(need_fin)}...", pct)
+                if ann:
+                    fin_cache[sc] = ann
+                    save_edinet_financials(sc, ann)
+
+    # Build result from merged cache
+    result = {}
+    for sc in sec_codes:
+        ann = fin_cache.get(sc)
+        if not ann:
+            continue
+        ticker = ticker_map[sc]
+        price_raw = price_map.get(ticker)
+
+        bps = ann.get("bps") or ann.get("adjusted_bps")
+        pb = None
+        if bps and price_raw and float(bps) > 0:
+            pb = round(float(price_raw) / float(bps), 2)
+
+        div_ps = ann.get("dividend_per_share") or ann.get("adjusted_dividend_per_share")
+        div_yield = None
+        if div_ps and price_raw and float(price_raw) > 0:
+            div_yield = round(float(div_ps) / float(price_raw), 4)
+
+        revenue = ann.get("revenue")
+        net_income = ann.get("net_income")
+
+        result[ticker] = {
+            "per":          ann.get("per"),
+            "pb":           pb,
+            "eps":          ann.get("eps") or ann.get("adjusted_eps"),
+            "roe":          ann.get("roe_official"),
+            "dividend_yield": div_yield,
+            "revenue_b":    round(float(revenue) / 1e8, 1) if revenue else None,
+            "net_income_b": round(float(net_income) / 1e8, 1) if net_income else None,
+        }
+
+    return result
 
 
 def get_sp500_tickers():
@@ -688,15 +871,22 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
     is_japan = index == "nikkei225"
 
     jp_names = {}
+    _edinet_key = os.environ.get("EDINETDB_API_KEY", "")
     if index == "nasdaq100":
         tickers, sectors = get_nasdaq100_tickers()
     elif index == "nikkei225":
         tickers, sectors, jp_names = get_nikkei225_tickers()
+        # Enrich sectors from EDINET (parallel, 225 API calls)
+        if _edinet_key:
+            if progress_cb:
+                progress_cb("EDINETセクター取得中...", 3)
+            edinet_sectors = get_edinet_sectors(tickers, _edinet_key, progress_cb)
+            sectors.update(edinet_sectors)  # overwrite "N/A" with real industry
     else:
         tickers, sectors = get_sp500_tickers()
 
     if progress_cb:
-        progress_cb(f"Found {len(tickers)} tickers", 5)
+        progress_cb(f"Found {len(tickers)} tickers", 8)
 
     results, price_data = screen_momentum(tickers, sectors, progress_cb, is_japan=is_japan)
 
@@ -711,6 +901,29 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
 
     top_tickers = top["ticker"].tolist()
     fundamentals = get_fundamentals(top_tickers, progress_cb, is_japan=is_japan)
+
+    # For Nikkei 225: enrich fundamentals with EDINET annual data
+    if is_japan and _edinet_key:
+        if progress_cb:
+            progress_cb("EDINETファンダメンタルズ取得中...", 70)
+        # Build price_map from screening results for P/B and dividend yield calc
+        price_map = {r["ticker"]: r["price"] for r in results if "ticker" in r}
+        edinet_funds = get_edinet_fundamentals(top_tickers, _edinet_key, price_map, progress_cb)
+        for f in fundamentals:
+            ef = edinet_funds.get(f["ticker"], {})
+            # Fill only missing / zero values from yfinance
+            if not f.get("pe_trailing") and ef.get("per"):
+                f["pe_trailing"] = round(float(ef["per"]), 1)
+            if not f.get("pb") and ef.get("pb"):
+                f["pb"] = ef["pb"]
+            if not f.get("eps") and ef.get("eps"):
+                f["eps"] = round(float(ef["eps"]), 2)
+            if not f.get("dividend_yield") and ef.get("dividend_yield"):
+                f["dividend_yield"] = ef["dividend_yield"]
+            # EDINET-only fields
+            f["roe"] = ef.get("roe")
+            f["revenue_b"] = ef.get("revenue_b")
+            f["net_income_b"] = ef.get("net_income_b")
 
     if progress_cb:
         progress_cb("Building report...", 97)
@@ -767,6 +980,10 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
                 "recommendation": fund.get("recommendation"),
                 "earnings_date": fund.get("earnings_date"),
                 "days_to_earnings": fund.get("days_to_earnings"),
+                # EDINET-only (Nikkei 225)
+                "roe": fund.get("roe"),
+                "revenue_b": fund.get("revenue_b"),
+                "net_income_b": fund.get("net_income_b"),
             },
             "short_interest": {
                 "short_pct_of_float": fund.get("short_pct_of_float"),
