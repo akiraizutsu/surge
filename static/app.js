@@ -865,7 +865,7 @@ function showDetail(stock) {
         ['PER (実績)', fmtVal(f.pe_trailing)],
         ['PER (予想)', fmtVal(f.pe_forward)],
         ['PBR', fmtVal(f.pb)],
-        ['配当利回り', f.dividend_yield ? (f.dividend_yield * 100).toFixed(2) + '%' : '-'],
+        ['配当利回り', f.dividend_yield ? f.dividend_yield.toFixed(2) + '%' : '-'],
         ['EPS', fmtVal(f.eps)],
         ...(isJapanIndex() ? [
           ['ROE', f.roe != null ? (f.roe * 100).toFixed(1) + '%' : '-'],

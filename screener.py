@@ -177,7 +177,7 @@ def get_edinet_fundamentals(tickers, api_key, price_map, progress_cb=None):
         div_ps = ann.get("dividend_per_share") or ann.get("adjusted_dividend_per_share")
         div_yield = None
         if div_ps and price_raw and float(price_raw) > 0:
-            div_yield = round(float(div_ps) / float(price_raw), 4)
+            div_yield = round(float(div_ps) / float(price_raw) * 100, 2)  # % scale, matches yfinance
 
         revenue = ann.get("revenue")
         net_income = ann.get("net_income")
