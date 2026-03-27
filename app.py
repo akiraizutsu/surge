@@ -4,7 +4,7 @@ import json
 import os
 import threading
 from datetime import datetime, timezone
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, session, redirect, url_for
 
 # Load .env for local development (no-op on Railway where vars are injected)
 _dotenv = os.path.join(os.path.dirname(__file__), ".env")
@@ -32,7 +32,41 @@ from database import (
 )
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "surge-dev-fallback-key-change-in-prod")
 init_db()
+
+
+# ── Authentication ────────────────────────────────────────────────────────────
+
+@app.before_request
+def require_login():
+    """Block unauthenticated access to all routes except /login and /static."""
+    if request.endpoint in ("login", "logout", "static"):
+        return
+    if not session.get("authenticated"):
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "Unauthorized"}), 401
+        return redirect(url_for("login"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        pw = request.form.get("password", "")
+        correct = os.environ.get("SURGE_PASSWORD", "")
+        if correct and pw == correct:
+            session["authenticated"] = True
+            session.permanent = True
+            return redirect(url_for("index"))
+        error = "パスワードが違います"
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 ALL_INDICES = ["sp500", "nasdaq100", "nikkei225"]
 

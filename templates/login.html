@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Surge — ログイン</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        fontFamily: {
+          sans: ['"Zen Kaku Gothic New"', 'Ubuntu', 'system-ui', 'sans-serif'],
+          mono: ['Ubuntu Mono', 'ui-monospace', 'monospace'],
+        },
+        extend: {
+          letterSpacing: { brand: '0.08em' },
+          colors: {
+            primary: {
+              50:  'hsl(var(--hue) 90% 96%)',
+              100: 'hsl(var(--hue) 85% 90%)',
+              200: 'hsl(var(--hue) 80% 80%)',
+              300: 'hsl(var(--hue) 75% 68%)',
+              400: 'hsl(var(--hue) 70% 55%)',
+              500: 'hsl(var(--hue) 65% 45%)',
+              600: 'hsl(var(--hue) 65% 38%)',
+              700: 'hsl(var(--hue) 60% 30%)',
+              800: 'hsl(var(--hue) 55% 23%)',
+              900: 'hsl(var(--hue) 50% 17%)',
+              950: 'hsl(var(--hue) 45% 10%)',
+            }
+          },
+          animation: {
+            'pulse-slow': 'pulse 4s cubic-bezier(0.4,0,0.6,1) infinite',
+            'float': 'float 6s ease-in-out infinite',
+            'float-delay': 'float 6s ease-in-out 2s infinite',
+          },
+          keyframes: {
+            float: {
+              '0%,100%': { transform: 'translateY(0px)' },
+              '50%': { transform: 'translateY(-12px)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root { --hue: 187; }
+    body { letter-spacing: 0.02em; line-height: 1.8; }
+
+    /* Animated gradient background */
+    .bg-gradient-surge {
+      background: linear-gradient(135deg,
+        hsl(var(--hue) 65% 12%) 0%,
+        hsl(var(--hue) 55% 8%) 40%,
+        hsl(200 60% 6%) 100%);
+    }
+
+    /* Decorative grid */
+    .grid-overlay {
+      background-image:
+        linear-gradient(hsl(var(--hue) 60% 30% / 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, hsl(var(--hue) 60% 30% / 0.08) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+
+    /* Glow orbs */
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      pointer-events: none;
+    }
+
+    /* Candlestick bars */
+    .candle {
+      position: absolute;
+      bottom: 0;
+      border-radius: 2px 2px 0 0;
+      opacity: 0.15;
+    }
+
+    /* Input focus glow */
+    .input-surge:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px hsl(var(--hue) 65% 45% / 0.25);
+      border-color: hsl(var(--hue) 65% 45%);
+    }
+
+    /* Login button shimmer */
+    .btn-surge {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg,
+        hsl(var(--hue) 65% 45%) 0%,
+        hsl(var(--hue) 70% 38%) 100%);
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn-surge::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, white/10, transparent 60%);
+      pointer-events: none;
+    }
+    .btn-surge:hover { opacity: 0.92; transform: translateY(-1px); }
+    .btn-surge:active { transform: translateY(0); }
+
+    /* Card glass effect */
+    .card-glass {
+      background: rgba(255,255,255,0.04);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    /* Sparkline SVG */
+    .sparkline { opacity: 0.12; }
+  </style>
+</head>
+<body class="bg-gradient-surge min-h-screen flex items-center justify-center relative overflow-hidden">
+
+  <!-- Grid overlay -->
+  <div class="absolute inset-0 grid-overlay"></div>
+
+  <!-- Glow orbs -->
+  <div class="orb w-96 h-96 animate-pulse-slow"
+       style="background: hsl(var(--hue) 70% 50%); opacity:0.12; top:-8rem; left:-6rem;"></div>
+  <div class="orb w-72 h-72 animate-pulse-slow"
+       style="background: hsl(200 70% 50%); opacity:0.10; bottom:-4rem; right:-4rem; animation-delay:2s;"></div>
+
+  <!-- Decorative candlestick chart -->
+  <div class="absolute bottom-0 left-0 right-0 h-40 pointer-events-none overflow-hidden">
+    <svg viewBox="0 0 800 160" preserveAspectRatio="none" class="w-full h-full sparkline"
+         fill="none" stroke="hsl(var(--hue) 70% 55%)" stroke-width="1.5">
+      <!-- Sparkline -->
+      <polyline points="0,120 50,100 100,108 150,85 200,92 250,70 300,78 350,55 400,62 450,48 500,58 550,40 600,52 650,35 700,42 750,28 800,38"
+                fill="none"/>
+      <!-- Candles -->
+      <line x1="50" y1="95" x2="50" y2="105" stroke-width="8" stroke-linecap="round"/>
+      <line x1="150" y1="80" x2="150" y2="90" stroke-width="8" stroke-linecap="round"/>
+      <line x1="250" y1="65" x2="250" y2="75" stroke-width="8" stroke-linecap="round"/>
+      <line x1="350" y1="50" x2="350" y2="60" stroke-width="8" stroke-linecap="round"/>
+      <line x1="450" y1="43" x2="450" y2="53" stroke-width="8" stroke-linecap="round"/>
+      <line x1="550" y1="35" x2="550" y2="45" stroke-width="8" stroke-linecap="round"/>
+      <line x1="650" y1="30" x2="650" y2="40" stroke-width="8" stroke-linecap="round"/>
+      <line x1="750" y1="23" x2="750" y2="33" stroke-width="8" stroke-linecap="round"/>
+      <!-- Gradient fill under line -->
+    </svg>
+  </div>
+
+  <!-- Login card -->
+  <div class="relative z-10 w-full max-w-sm mx-4">
+
+    <!-- Logo section -->
+    <div class="text-center mb-8 animate-float">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+           style="background: hsl(var(--hue) 65% 45% / 0.2); border: 1px solid hsl(var(--hue) 65% 45% / 0.3);">
+        <!-- Chart icon -->
+        <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--hue) 70% 65%)" stroke-width="2" stroke-linecap="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+      </div>
+      <h1 class="text-4xl font-bold tracking-brand text-white uppercase" style="letter-spacing: 0.15em;">SURGE</h1>
+      <p class="text-sm mt-1" style="color: hsl(var(--hue) 50% 60%);">Momentum Dashboard</p>
+    </div>
+
+    <!-- Card -->
+    <div class="card-glass rounded-2xl p-8 shadow-sm">
+
+      <h2 class="text-white text-base font-medium mb-6 text-center">アクセスコードを入力</h2>
+
+      {% if error %}
+      <div class="mb-4 px-4 py-3 rounded-xl text-sm text-center"
+           style="background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.2); color: #fca5a5;">
+        {{ error }}
+      </div>
+      {% endif %}
+
+      <form method="post" autocomplete="off">
+        <!-- Password input -->
+        <div class="relative mb-6">
+          <input
+            id="passwordInput"
+            name="password"
+            type="password"
+            placeholder="パスワード"
+            autofocus
+            class="input-surge w-full px-4 py-3.5 rounded-xl text-white text-sm transition-all"
+            style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);"
+          >
+          <!-- Show/hide toggle -->
+          <button type="button" onclick="togglePw()" tabindex="-1"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-colors"
+                  style="color: rgba(255,255,255,0.4);">
+            <svg id="eyeIcon" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+            <svg id="eyeOffIcon" class="w-4 h-4 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+              <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Login button -->
+        <button type="submit" class="btn-surge w-full py-3.5 rounded-xl text-white font-medium text-sm tracking-wide">
+          ログイン
+        </button>
+      </form>
+
+      <!-- Footer note -->
+      <p class="text-center text-xs mt-6" style="color: rgba(255,255,255,0.25);">
+        個人利用・教育目的のみ
+      </p>
+    </div>
+
+    <!-- Badge -->
+    <p class="text-center text-xs mt-6" style="color: hsl(var(--hue) 40% 40%);">
+      Surge — Yahoo Finance データ使用
+    </p>
+  </div>
+
+  <script>
+    function togglePw() {
+      const inp = document.getElementById('passwordInput');
+      const eye = document.getElementById('eyeIcon');
+      const eyeOff = document.getElementById('eyeOffIcon');
+      if (inp.type === 'password') {
+        inp.type = 'text';
+        eye.classList.add('hidden');
+        eyeOff.classList.remove('hidden');
+      } else {
+        inp.type = 'password';
+        eye.classList.remove('hidden');
+        eyeOff.classList.add('hidden');
+      }
+    }
+  </script>
+</body>
+</html>
