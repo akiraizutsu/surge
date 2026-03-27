@@ -315,6 +315,88 @@
       </div>
     </div>
 
+    <!-- CF Analysis Modal -->
+    <div id="cfModal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4" onclick="if(event.target===this)closeCfModal()">
+      <div class="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-xl border border-slate-200 dark:border-gray-800 shadow-xl max-w-3xl w-full max-h-[92vh] sm:max-h-[88vh] overflow-y-auto">
+        <div class="p-4 sm:p-6">
+          <!-- Header -->
+          <div class="flex items-center justify-between mb-1">
+            <h2 id="cfModalTitle" class="text-xl font-bold text-slate-900 dark:text-gray-100"></h2>
+            <button onclick="closeCfModal()" class="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 text-2xl leading-none rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer" aria-label="閉じる">&times;</button>
+          </div>
+          <div id="cfModalSubtitle" class="text-xs text-slate-400 dark:text-gray-500 mb-4"></div>
+
+          <!-- Loading -->
+          <div id="cfModalLoading" class="hidden flex flex-col items-center justify-center py-12 gap-3">
+            <div class="w-8 h-8 border-2 border-primary-400 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-sm text-slate-400">CFデータを取得中...</span>
+          </div>
+
+          <!-- Error -->
+          <div id="cfModalError" class="hidden text-center py-12 text-rose-400 text-sm"></div>
+
+          <!-- Content -->
+          <div id="cfModalContent" class="hidden space-y-6">
+
+            <!-- Summary cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="cfSummaryCards"></div>
+
+            <!-- M&A Capacity -->
+            <div id="cfMaArea" class="bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-100 dark:border-amber-900/30 p-4">
+              <div class="text-xs font-medium text-amber-700 dark:text-amber-400 mb-3 tracking-wider">M&A 実弾試算</div>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="cfMaCards"></div>
+            </div>
+
+            <!-- Annual CF bar chart -->
+            <div class="card">
+              <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3">CF 三区分（年次）</h3>
+              <div class="relative" style="height:260px">
+                <canvas id="cfChartAnnual"></canvas>
+              </div>
+            </div>
+
+            <!-- FCF bar chart -->
+            <div class="card">
+              <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3">営業CF / FCF（年次）</h3>
+              <div class="relative" style="height:200px">
+                <canvas id="cfChartFcf"></canvas>
+              </div>
+            </div>
+
+            <!-- Quarterly FCF -->
+            <div class="card">
+              <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3">営業CF（四半期・単体）</h3>
+              <div class="relative" style="height:180px">
+                <canvas id="cfChartQuarterly"></canvas>
+              </div>
+            </div>
+
+            <!-- Detail table -->
+            <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-gray-800">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50">
+                    <th class="px-3 py-2 text-left text-slate-500 whitespace-nowrap">期</th>
+                    <th class="px-3 py-2 text-right text-slate-500 whitespace-nowrap">営業CF</th>
+                    <th class="px-3 py-2 text-right text-slate-500 whitespace-nowrap">投資CF</th>
+                    <th class="px-3 py-2 text-right text-slate-500 whitespace-nowrap">財務CF</th>
+                    <th class="px-3 py-2 text-right text-slate-500 whitespace-nowrap">設備投資</th>
+                    <th class="px-3 py-2 text-right text-slate-500 whitespace-nowrap font-semibold">FCF</th>
+                  </tr>
+                </thead>
+                <tbody id="cfDetailTable"></tbody>
+              </table>
+            </div>
+
+            <!-- Refresh button -->
+            <div class="flex justify-end">
+              <button id="cfRefreshBtn" class="text-xs text-slate-400 dark:text-gray-500 hover:text-primary-500 transition-colors cursor-pointer" onclick="refreshCfData()">データを更新</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Empty State -->
     <div id="emptyState" class="text-center py-16 hidden">
       <div class="w-16 h-16 bg-slate-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">

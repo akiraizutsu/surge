@@ -122,6 +122,13 @@ def init_db():
                 ticker TEXT NOT NULL UNIQUE,
                 added_at TEXT DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS cf_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL UNIQUE,
+                data TEXT NOT NULL,
+                fetched_at TEXT DEFAULT (datetime('now'))
+            );
         """)
     conn.close()
 
@@ -413,3 +420,33 @@ def get_watchlist():
     rows = conn.execute("SELECT ticker FROM watchlist ORDER BY added_at DESC").fetchall()
     conn.close()
     return [r["ticker"] for r in rows]
+
+
+# ── CF Cache ──
+
+def save_cf_cache(ticker, data_json):
+    conn = _connect()
+    with conn:
+        conn.execute(
+            """INSERT OR REPLACE INTO cf_cache (ticker, data, fetched_at)
+               VALUES (?, ?, datetime('now'))""",
+            (ticker.upper(), data_json),
+        )
+    conn.close()
+
+
+def get_cf_cache(ticker):
+    conn = _connect()
+    row = conn.execute(
+        "SELECT data, fetched_at FROM cf_cache WHERE ticker = ?",
+        (ticker.upper(),),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def clear_cf_cache(ticker):
+    conn = _connect()
+    with conn:
+        conn.execute("DELETE FROM cf_cache WHERE ticker = ?", (ticker.upper(),))
+    conn.close()
