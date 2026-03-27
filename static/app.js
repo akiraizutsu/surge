@@ -174,8 +174,9 @@ function pollProgress() {
             renderDashboard(data);
             document.getElementById('statusText').textContent = '最終更新: ' + data.generated_at;
           } else {
-            // Fallback: show first available
-            const firstKey = Object.keys(allResults)[0];
+            // Fallback: prefer sp500 > nasdaq100 > nikkei225
+            const preferred = ['sp500', 'nasdaq100', 'nikkei225'];
+            const firstKey = preferred.find(k => allResults[k]) || Object.keys(allResults)[0];
             if (firstKey) {
               activeTab = firstKey;
               switchTab(firstKey);
@@ -951,7 +952,9 @@ async function init() {
           if (allResults[activeTab]) {
             switchTab(activeTab);
           } else {
-            switchTab(keys[0]);
+            const preferred = ['sp500', 'nasdaq100', 'nikkei225'];
+            const firstKey = preferred.find(k => allResults[k]) || keys[0];
+            switchTab(firstKey);
           }
           return; // Data loaded, don't show empty state
         }
