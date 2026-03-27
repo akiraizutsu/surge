@@ -139,7 +139,25 @@ def init_db():
                 fin_fetched_at TEXT
             );
         """)
+
+        # ── Schema migrations: add columns to existing tables ──────────────
+        _add_column_if_missing(conn, "screening_results", "high_52w", "REAL")
+        _add_column_if_missing(conn, "screening_results", "low_52w", "REAL")
+        _add_column_if_missing(conn, "screening_results", "dist_from_high", "REAL")
+        _add_column_if_missing(conn, "screening_results", "bb_width", "REAL")
+        _add_column_if_missing(conn, "screening_results", "earnings_date", "TEXT")
+        _add_column_if_missing(conn, "screening_results", "days_to_earnings", "INTEGER")
+        _add_column_if_missing(conn, "edinet_company_cache", "latest_financials_json", "TEXT")
+        _add_column_if_missing(conn, "edinet_company_cache", "fin_fetched_at", "TEXT")
+
     conn.close()
+
+
+def _add_column_if_missing(conn, table, column, col_type):
+    """Add a column to a table only if it doesn't already exist."""
+    existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
 
 
 # ── Sessions ──
