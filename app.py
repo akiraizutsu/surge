@@ -40,8 +40,11 @@ init_db()
 
 @app.before_request
 def require_login():
-    """Block unauthenticated access to all routes except /login and /static."""
+    """Block unauthenticated access to all routes except /login, /static, and health check."""
     if request.endpoint in ("login", "logout", "static"):
+        return
+    # Allow Railway health check to pass without auth
+    if request.path == "/api/status":
         return
     if not session.get("authenticated"):
         if request.path.startswith("/api/"):
