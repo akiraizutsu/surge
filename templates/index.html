@@ -42,12 +42,47 @@
     }
   </script>
 </head>
-<body class="bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-gray-100 min-h-screen transition-colors">
+<body class="text-slate-900 dark:text-gray-100 min-h-screen transition-colors">
+
+  <!-- Background decorations (dark mode only) -->
+  <div id="bgGrid" class="fixed inset-0 bg-grid-surge pointer-events-none z-0 opacity-0 dark-bg-visible"></div>
+  <div id="bgOrb1" class="fixed pointer-events-none z-0 rounded-full bg-orb-1 dark-bg-visible opacity-0"
+       style="width:28rem;height:28rem;top:-8rem;left:-6rem;filter:blur(80px);"></div>
+  <div id="bgOrb2" class="fixed pointer-events-none z-0 rounded-full bg-orb-2 dark-bg-visible opacity-0"
+       style="width:20rem;height:20rem;bottom:-4rem;right:-4rem;filter:blur(80px);"></div>
+  <!-- Sparkline at bottom -->
+  <div id="bgSparkline" class="fixed bottom-0 left-0 right-0 h-36 pointer-events-none z-0 dark-bg-visible opacity-0 overflow-hidden">
+    <svg viewBox="0 0 800 144" preserveAspectRatio="none" class="w-full h-full"
+         fill="none" stroke-width="1.5" stroke-linecap="round">
+      <polyline style="stroke:hsl(var(--hue,187) 70% 55% / 0.10);"
+        points="0,120 50,100 100,108 150,85 200,92 250,70 300,78 350,55 400,62 450,48 500,58 550,40 600,52 650,35 700,42 750,28 800,38"/>
+      <line x1="50"  y1="95"  x2="50"  y2="105" style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+      <line x1="150" y1="80"  x2="150" y2="90"  style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+      <line x1="250" y1="65"  x2="250" y2="75"  style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+      <line x1="350" y1="50"  x2="350" y2="60"  style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+      <line x1="450" y1="43"  x2="450" y2="53"  style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+      <line x1="550" y1="35"  x2="550" y2="45"  style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+      <line x1="650" y1="30"  x2="650" y2="40"  style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+      <line x1="750" y1="23"  x2="750" y2="33"  style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+    </svg>
+  </div>
 
   <!-- Header -->
-  <header class="bg-primary-600 dark:bg-primary-900 text-white shadow-sm">
+  <header class="relative z-10 bg-primary-600/90 dark:bg-primary-950/80 dark:backdrop-blur-md text-white shadow-sm">
     <div class="mx-auto px-4 sm:px-8 py-3 sm:py-4 flex items-center justify-between gap-2">
-      <h1 class="text-lg sm:text-xl font-bold tracking-brand uppercase">Surge</h1>
+      <!-- Logo group -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <div class="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-xl shrink-0"
+             style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2);">
+          <svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <div class="flex items-baseline gap-2">
+          <h1 class="text-lg sm:text-xl font-bold tracking-brand uppercase">SURGE</h1>
+          <span class="text-xs opacity-55 font-normal hidden sm:inline" style="letter-spacing:0.05em;">Momentum Dashboard</span>
+        </div>
+      </div>
       <div class="flex items-center gap-2 sm:gap-4">
         <div class="flex items-center gap-1.5">
           <label for="colorPicker" class="text-xs sm:text-sm opacity-80 hidden sm:inline">テーマ</label>
@@ -63,7 +98,7 @@
     </div>
   </header>
 
-  <main class="mx-auto px-4 sm:px-8 py-4 sm:py-8 space-y-4 sm:space-y-8">
+  <main class="relative z-10 mx-auto px-4 sm:px-8 py-4 sm:py-8 space-y-4 sm:space-y-8">
 
     <!-- Controls -->
     <div class="flex items-center gap-2 sm:gap-4 flex-wrap">

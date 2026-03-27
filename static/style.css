@@ -4,6 +4,54 @@
   --hue: 187;
 }
 
+/* ── Light / Dark background ───────────────────────────────────────────── */
+body {
+  background: #f8fafc;
+}
+
+.dark body {
+  background: linear-gradient(135deg,
+    hsl(var(--hue) 65% 8%) 0%,
+    hsl(var(--hue) 55% 5%) 40%,
+    hsl(200 60% 4%) 100%);
+  background-attachment: fixed;
+}
+
+/* ── Background decorations (grid / orbs / sparkline) ────────────────── */
+.bg-grid-surge {
+  background-image:
+    linear-gradient(hsl(var(--hue) 60% 30% / 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--hue) 60% 30% / 0.07) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.bg-orb-1 {
+  background: hsl(var(--hue) 70% 45%);
+}
+
+.bg-orb-2 {
+  background: hsl(200 70% 45%);
+}
+
+/* Show decorations only in dark mode */
+.dark .dark-bg-visible {
+  opacity: 1 !important;
+  transition: opacity 0.4s ease;
+}
+
+/* Orb pulse animation */
+@keyframes surge-pulse {
+  0%, 100% { opacity: 0.10; }
+  50%       { opacity: 0.16; }
+}
+
+.dark #bgOrb1 {
+  animation: surge-pulse 5s ease-in-out infinite;
+}
+.dark #bgOrb2 {
+  animation: surge-pulse 5s ease-in-out 2s infinite;
+}
+
 /* Typography - Zen Kaku Gothic New + Ubuntu */
 body {
   font-family: 'Zen Kaku Gothic New', 'Ubuntu', system-ui, sans-serif;

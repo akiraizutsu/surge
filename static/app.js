@@ -74,7 +74,7 @@ function toggleDark() {
 
 function initDarkMode() {
   const stored = localStorage.getItem('dark-mode');
-  const isDark = stored === 'true';
+  const isDark = stored === null ? true : stored === 'true'; // default: dark
   if (isDark) document.documentElement.classList.add('dark');
   document.getElementById('darkIcon').textContent = isDark ? '\u2600' : '\u263E';
 }
