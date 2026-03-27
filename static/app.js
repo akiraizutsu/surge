@@ -394,8 +394,12 @@ function renderContrarianTable(ranking) {
     const recClass = (r.recommendation === 'buy' || r.recommendation === 'strong_buy')
       ? 'text-emerald-600 dark:text-emerald-400 font-medium' : '';
 
+    const cfBtnC = isJapanIndex()
+      ? `<button onclick="showCfModal('${r.ticker}',event)" class="text-[9px] font-bold px-1 py-0.5 rounded bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-colors leading-none cursor-pointer">CF</button>`
+      : '';
     return `<tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors" onclick='showContrarianDetail(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
       <td class="px-2 sm:px-4 py-2 sm:py-3 text-slate-400 text-xs sm:text-sm whitespace-nowrap">${r.rank}</td>
+      <td class="px-2 py-2 sm:py-3 text-center">${cfBtnC}</td>
       <td class="px-2 sm:px-4 py-2 sm:py-3 font-semibold text-primary-600 dark:text-primary-400 text-xs sm:text-sm whitespace-nowrap">${r.ticker}</td>
       <td class="px-4 py-3 text-slate-500 dark:text-gray-400 hidden lg:table-cell text-xs max-w-[180px] truncate">${r.name}</td>
       <td class="px-4 py-3 text-xs text-slate-600 dark:text-gray-400 whitespace-nowrap hidden md:table-cell">${r.sector}</td>
