@@ -1114,21 +1114,36 @@ function _renderCfModal(data) {
     }
   );
 
-  // Quarterly FCF
-  const qData = data.quarterly || [];
-  if (_cfChartQuarterly) _cfChartQuarterly.destroy();
-  _cfChartQuarterly = new Chart(
-    document.getElementById('cfChartQuarterly').getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels: qData.map(e => e.period),
-        datasets: [{ label: 'FCF (四半期)', data: qData.map(e => e.fcf),
-          backgroundColor: qData.map(e => (e.fcf || 0) >= 0 ? 'rgba(52,211,153,0.65)' : 'rgba(251,113,133,0.65)'),
-          borderWidth: 0 }],
-      },
-      options: _cfChartOpts(textColor, gridColor, unit),
+  // Quarterly CF
+  const qData = (data.quarterly || []).filter(e => e.operating_cf != null);
+  const qContainer = document.getElementById('cfChartQuarterly').parentElement;
+  if (_cfChartQuarterly) { _cfChartQuarterly.destroy(); _cfChartQuarterly = null; }
+  if (qData.length === 0) {
+    // EDINET quarterly reports don't include CF statements
+    document.getElementById('cfChartQuarterly').style.display = 'none';
+    if (!qContainer.querySelector('.cf-no-quarterly')) {
+      const msg = document.createElement('div');
+      msg.className = 'cf-no-quarterly flex items-center justify-center h-full text-xs text-slate-400 dark:text-gray-500';
+      msg.textContent = '四半期CF計算書はEDINET非掲載（年次のみ）';
+      qContainer.appendChild(msg);
     }
-  );
+  } else {
+    document.getElementById('cfChartQuarterly').style.display = '';
+    const noMsg = qContainer.querySelector('.cf-no-quarterly');
+    if (noMsg) noMsg.remove();
+    _cfChartQuarterly = new Chart(
+      document.getElementById('cfChartQuarterly').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: qData.map(e => e.period),
+          datasets: [{ label: '営業CF (四半期)', data: qData.map(e => e.operating_cf),
+            backgroundColor: qData.map(e => (e.operating_cf || 0) >= 0 ? 'rgba(52,211,153,0.65)' : 'rgba(251,113,133,0.65)'),
+            borderWidth: 0 }],
+        },
+        options: _cfChartOpts(textColor, gridColor, unit),
+      }
+    );
+  }
 
   // ── Detail Table ──
   const retCls = (v) => v == null ? '' : v >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-400 dark:text-rose-300';
