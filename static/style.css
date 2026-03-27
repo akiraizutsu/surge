@@ -35,21 +35,44 @@ body {
 
 /* Show decorations only in dark mode */
 .dark .dark-bg-visible {
-  opacity: 1 !important;
   transition: opacity 0.4s ease;
 }
 
-/* Orb pulse animation */
-@keyframes surge-pulse {
+/* ── Animations ──────────────────────────────────────────────────────── */
+
+/* Orb: slow opacity pulse */
+@keyframes surge-orb-pulse {
   0%, 100% { opacity: 0.10; }
-  50%       { opacity: 0.16; }
+  50%       { opacity: 0.18; }
+}
+
+/* Sparkline: gentle vertical float */
+@keyframes surge-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-10px); }
+}
+
+/* Grid: slow horizontal drift */
+@keyframes surge-grid-drift {
+  0%   { background-position: 0 0; }
+  100% { background-position: 48px 48px; }
 }
 
 .dark #bgOrb1 {
-  animation: surge-pulse 5s ease-in-out infinite;
+  opacity: 0;
+  animation: surge-orb-pulse 5s cubic-bezier(0.4,0,0.6,1) infinite;
 }
 .dark #bgOrb2 {
-  animation: surge-pulse 5s ease-in-out 2s infinite;
+  opacity: 0;
+  animation: surge-orb-pulse 5s cubic-bezier(0.4,0,0.6,1) 2s infinite;
+}
+.dark #bgSparkline {
+  opacity: 1;
+  animation: surge-float 8s ease-in-out infinite;
+}
+.dark #bgGrid {
+  opacity: 1;
+  animation: surge-grid-drift 20s linear infinite;
 }
 
 /* Typography - Zen Kaku Gothic New + Ubuntu */
