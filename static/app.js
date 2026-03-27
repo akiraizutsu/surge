@@ -589,12 +589,18 @@ function renderTable(ranking) {
     const rsiClass = t.rsi > 70 ? 'text-rose-400 font-semibold' : t.rsi < 30 ? 'text-emerald-500 font-semibold' : '';
 
     const starred = watchlistTickers.has(r.ticker);
+    const cfBtn = isJapanIndex()
+      ? `<button onclick="showCfModal('${r.ticker}',event)" class="text-[9px] font-bold px-1 py-0.5 rounded bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-colors leading-none cursor-pointer">CF</button>`
+      : '';
     const starCell = `<td class="px-2 py-3 text-center">
-      <button onclick="toggleStar('${r.ticker}', event)"
-        class="text-lg leading-none cursor-pointer hover:scale-110 transition-transform ${starred ? 'text-amber-400' : 'text-slate-300 dark:text-gray-600'}"
-        aria-label="${starred ? 'ウォッチリストから削除' : 'ウォッチリストに追加'}">
-        ${starred ? '&#9733;' : '&#9734;'}
-      </button>
+      <div class="flex flex-col items-center gap-0.5">
+        <button onclick="toggleStar('${r.ticker}', event)"
+          class="text-lg leading-none cursor-pointer hover:scale-110 transition-transform ${starred ? 'text-amber-400' : 'text-slate-300 dark:text-gray-600'}"
+          aria-label="${starred ? 'ウォッチリストから削除' : 'ウォッチリストに追加'}">
+          ${starred ? '&#9733;' : '&#9734;'}
+        </button>
+        ${cfBtn}
+      </div>
     </td>`;
 
     const sqScore = r.squeeze_score;
@@ -883,10 +889,6 @@ function closeModal() {
   document.getElementById('modal').classList.remove('flex');
 }
 
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeModal();
-});
-
 // ── Watchlist ──
 async function loadWatchlist() {
   try {
@@ -970,6 +972,197 @@ async function init() {
     // No results and not running — show empty state
     document.getElementById('emptyState').classList.remove('hidden');
   });
+}
+
+// ── CF Analysis Modal ──
+
+let _cfChartAnnual = null;
+let _cfChartFcf = null;
+let _cfChartQuarterly = null;
+let _cfCurrentTicker = null;
+
+function showCfModal(ticker, event) {
+  if (event) event.stopPropagation();
+  _cfCurrentTicker = ticker;
+  document.getElementById('cfModalTitle').textContent = ticker.replace('.T', '');
+  document.getElementById('cfModalSubtitle').textContent = '';
+  document.getElementById('cfModalLoading').classList.remove('hidden');
+  document.getElementById('cfModalError').classList.add('hidden');
+  document.getElementById('cfModalContent').classList.add('hidden');
+  document.getElementById('cfModal').classList.remove('hidden');
+  document.getElementById('cfModal').classList.add('flex');
+  _loadCfData(ticker);
+}
+
+function closeCfModal() {
+  document.getElementById('cfModal').classList.add('hidden');
+  document.getElementById('cfModal').classList.remove('flex');
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closeCfModal(); closeModal(); }
+});
+
+async function refreshCfData() {
+  if (!_cfCurrentTicker) return;
+  // Clear cache then reload
+  await fetch(`/api/cf_cache/clear/${encodeURIComponent(_cfCurrentTicker)}`, { method: 'DELETE' });
+  document.getElementById('cfModalLoading').classList.remove('hidden');
+  document.getElementById('cfModalContent').classList.add('hidden');
+  document.getElementById('cfModalError').classList.add('hidden');
+  _loadCfData(_cfCurrentTicker);
+}
+
+async function _loadCfData(ticker) {
+  try {
+    const resp = await fetch(`/api/cf_analysis/${encodeURIComponent(ticker)}`);
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || 'データ取得失敗');
+    }
+    const data = await resp.json();
+    document.getElementById('cfModalLoading').classList.add('hidden');
+    _renderCfModal(data);
+  } catch (e) {
+    document.getElementById('cfModalLoading').classList.add('hidden');
+    document.getElementById('cfModalError').classList.remove('hidden');
+    document.getElementById('cfModalError').textContent = 'エラー: ' + e.message;
+  }
+}
+
+function _renderCfModal(data) {
+  const unit = data.unit || '億円';
+  const fmt = (v) => v != null ? v.toLocaleString() : '-';
+  const fmtU = (v) => v != null ? v.toLocaleString() + ' ' + unit : '-';
+
+  document.getElementById('cfModalTitle').textContent =
+    `${data.ticker.replace('.T', '')} — CF分析`;
+  document.getElementById('cfModalSubtitle').textContent = data.company_name;
+
+  // ── Summary Cards ──
+  const s = data.summary || {};
+  const trendColor = s.fcf_trend === '増加' ? 'text-emerald-500' :
+                     s.fcf_trend === '減少' ? 'text-rose-400' : 'text-slate-500';
+  document.getElementById('cfSummaryCards').innerHTML = [
+    ['直近FCF', fmtU(s.latest_fcf)],
+    ['3年平均FCF', fmtU(s.avg_fcf_3y)],
+    ['3年平均営業CF', fmtU(s.avg_operating_cf_3y)],
+    ['FCFトレンド', s.fcf_trend || '-'],
+  ].map(([label, val], i) => `
+    <div class="bg-slate-50 dark:bg-gray-800 rounded-xl p-3 border border-slate-100 dark:border-gray-700">
+      <div class="text-[10px] text-slate-400 dark:text-gray-500">${label}</div>
+      <div class="font-bold text-sm mt-0.5 ${i === 3 ? trendColor : 'text-primary-600 dark:text-primary-400'}">${val}</div>
+    </div>
+  `).join('');
+
+  // ── M&A Capacity ──
+  const ma = data.ma_capacity || {};
+  document.getElementById('cfMaCards').innerHTML = [
+    ['ネットキャッシュ', fmtU(ma.net_cash)],
+    ['年間FCF (3年平均)', fmtU(ma.annual_fcf)],
+    ['M&A 実弾 (3年分)', fmtU(ma.capacity_3y)],
+    ['M&A 実弾 (5年分)', fmtU(ma.capacity_5y)],
+  ].map(([label, val]) => `
+    <div class="bg-white dark:bg-gray-900 rounded-lg p-3 border border-amber-100 dark:border-amber-900/30">
+      <div class="text-[10px] text-amber-600 dark:text-amber-400">${label}</div>
+      <div class="font-bold text-sm mt-0.5 text-amber-700 dark:text-amber-300">${val}</div>
+    </div>
+  `).join('');
+
+  // ── Charts ──
+  const isDark = document.documentElement.classList.contains('dark');
+  const textColor = isDark ? '#9ca3af' : '#6b7280';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+
+  const timeline = data.timeline || [];
+  const labels = timeline.map(e => e.period);
+
+  // Annual CF 三区分
+  if (_cfChartAnnual) _cfChartAnnual.destroy();
+  _cfChartAnnual = new Chart(
+    document.getElementById('cfChartAnnual').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: '営業CF', data: timeline.map(e => e.operating_cf),
+            backgroundColor: 'rgba(52,211,153,0.7)', borderColor: 'rgba(52,211,153,1)', borderWidth: 1 },
+          { label: '投資CF', data: timeline.map(e => e.investing_cf),
+            backgroundColor: 'rgba(251,113,133,0.7)', borderColor: 'rgba(251,113,133,1)', borderWidth: 1 },
+          { label: '財務CF', data: timeline.map(e => e.financing_cf),
+            backgroundColor: 'rgba(147,197,253,0.7)', borderColor: 'rgba(147,197,253,1)', borderWidth: 1 },
+        ],
+      },
+      options: _cfChartOpts(textColor, gridColor, unit),
+    }
+  );
+
+  // FCF 年次
+  if (_cfChartFcf) _cfChartFcf.destroy();
+  const fcfColors = timeline.map(e =>
+    e.fcf >= 0 ? 'rgba(52,211,153,0.75)' : 'rgba(251,113,133,0.75)'
+  );
+  _cfChartFcf = new Chart(
+    document.getElementById('cfChartFcf').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ label: 'FCF', data: timeline.map(e => e.fcf),
+          backgroundColor: fcfColors, borderWidth: 0 }],
+      },
+      options: _cfChartOpts(textColor, gridColor, unit),
+    }
+  );
+
+  // Quarterly FCF
+  const qData = data.quarterly || [];
+  if (_cfChartQuarterly) _cfChartQuarterly.destroy();
+  _cfChartQuarterly = new Chart(
+    document.getElementById('cfChartQuarterly').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: qData.map(e => e.period),
+        datasets: [{ label: 'FCF (四半期)', data: qData.map(e => e.fcf),
+          backgroundColor: qData.map(e => (e.fcf || 0) >= 0 ? 'rgba(52,211,153,0.65)' : 'rgba(251,113,133,0.65)'),
+          borderWidth: 0 }],
+      },
+      options: _cfChartOpts(textColor, gridColor, unit),
+    }
+  );
+
+  // ── Detail Table ──
+  const retCls = (v) => v == null ? '' : v >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-400 dark:text-rose-300';
+  document.getElementById('cfDetailTable').innerHTML = [...timeline].reverse().map(e => `
+    <tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/30">
+      <td class="px-3 py-2 font-medium whitespace-nowrap">${e.period}</td>
+      <td class="px-3 py-2 text-right font-mono ${retCls(e.operating_cf)}">${fmt(e.operating_cf)}</td>
+      <td class="px-3 py-2 text-right font-mono ${retCls(e.investing_cf)}">${fmt(e.investing_cf)}</td>
+      <td class="px-3 py-2 text-right font-mono ${retCls(e.financing_cf)}">${fmt(e.financing_cf)}</td>
+      <td class="px-3 py-2 text-right font-mono text-slate-400">${fmt(e.capex)}</td>
+      <td class="px-3 py-2 text-right font-mono font-semibold ${retCls(e.fcf)}">${fmt(e.fcf)}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('cfModalContent').classList.remove('hidden');
+}
+
+function _cfChartOpts(textColor, gridColor, unit) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: textColor, font: { size: 11 } } },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => `${ctx.dataset.label}: ${(ctx.raw || 0).toLocaleString()} ${unit}`,
+        },
+      },
+    },
+    scales: {
+      x: { ticks: { color: textColor, font: { size: 10 } }, grid: { display: false } },
+      y: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+    },
+  };
 }
 
 init();
