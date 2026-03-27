@@ -4,6 +4,10 @@
   --hue: 187;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 /* ── Light / Dark background ───────────────────────────────────────────── */
 body {
   background: #f8fafc;
