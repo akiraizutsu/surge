@@ -268,6 +268,34 @@ def get_nikkei225_tickers():
     return tickers, sectors, names
 
 
+def get_growth250_tickers():
+    """Fetch TSE Growth Market 250 constituent tickers from Wikipedia.
+
+    Returns (tickers, sectors, names).
+    """
+    url = "https://ja.wikipedia.org/wiki/東証グロース市場250指数"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    resp = requests.get(url, headers=headers, timeout=20)
+    resp.raise_for_status()
+    tables = pd.read_html(io.StringIO(resp.text))
+    tickers = []
+    names = {}
+    for table in tables:
+        cols = [str(c) for c in table.columns]
+        if "コード" in cols and "銘柄名" in cols:
+            for _, row in table.iterrows():
+                code = str(row["コード"]).strip()
+                if code.isdigit() and len(code) == 4:
+                    t = code + ".T"
+                    tickers.append(t)
+                    names[t] = str(row["銘柄名"]).strip()
+            break
+    if not tickers:
+        raise ValueError("Could not find Growth 250 ticker table on Wikipedia")
+    sectors = {t: "N/A" for t in tickers}
+    return tickers, sectors, names
+
+
 def compute_rsi(series, period=14):
     """Compute RSI."""
     delta = series.diff()
@@ -1054,7 +1082,7 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
     if progress_cb:
         progress_cb("Fetching ticker list...", 2)
 
-    is_japan = index == "nikkei225"
+    is_japan = index in ("nikkei225", "growth250")
 
     jp_names = {}
     _edinet_key = os.environ.get("EDINETDB_API_KEY", "")
@@ -1068,6 +1096,8 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
                 progress_cb("EDINETセクター取得中...", 3)
             edinet_sectors = get_edinet_sectors(tickers, _edinet_key, progress_cb)
             sectors.update(edinet_sectors)  # overwrite "N/A" with real industry
+    elif index == "growth250":
+        tickers, sectors, jp_names = get_growth250_tickers()
     else:
         tickers, sectors = get_sp500_tickers()
 
@@ -1280,7 +1310,7 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
 
     return {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "index": {"sp500": "S&P 500", "nasdaq100": "NASDAQ 100", "nikkei225": "日経225"}.get(index, index.upper()),
+        "index": {"sp500": "S&P 500", "nasdaq100": "NASDAQ 100", "nikkei225": "日経225", "growth250": "グロース250"}.get(index, index.upper()),
         "total_screened": len(results),
         "total_tickers": len(tickers),
         "top_n": top_n,

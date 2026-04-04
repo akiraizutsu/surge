@@ -113,6 +113,8 @@ def _run_screening_job(index, top_n):
             _run_all_indices(top_n)
         elif index == "us_all":
             _run_us_indices(top_n)
+        elif index == "japan_all":
+            _run_japan_indices(top_n)
         else:
             _run_single_index(index, top_n)
 
@@ -175,6 +177,32 @@ def _run_all_indices(top_n):
             save_breadth(idx, result["breadth"])
 
 
+def _run_japan_indices(top_n):
+    """Run screening for Nikkei 225 and Growth 250."""
+    japan_indices = ["nikkei225", "growth250"]
+    span_per = 100 // len(japan_indices)
+    for i, idx in enumerate(japan_indices):
+        offset = i * span_per
+        label = {"nikkei225": "日経225", "growth250": "グロース250"}[idx]
+        cb = _make_all_progress_cb(label, offset, span_per)
+        result = run_screening(index=idx, top_n=top_n, progress_cb=cb)
+        with _lock:
+            _state["results"][idx] = result
+            _state["result"] = result
+
+        session_id = save_session({
+            "index_name": idx,
+            "top_n": top_n,
+            "total_screened": result["total_screened"],
+            "generated_at": result["generated_at"],
+        })
+        save_results(session_id, result["momentum_ranking"])
+        if result.get("value_gap_ranking"):
+            save_value_gap_results(session_id, result["value_gap_ranking"])
+        if result.get("breadth"):
+            save_breadth(idx, result["breadth"])
+
+
 def _run_us_indices(top_n):
     """Run screening for S&P 500 and NASDAQ 100 only."""
     us_indices = ["sp500", "nasdaq100"]
@@ -221,8 +249,8 @@ def start_screening():
     index = data.get("index", "sp500")
     top_n = data.get("top_n", 20)
 
-    if index not in ("sp500", "nasdaq100", "nikkei225", "all", "us_all"):
-        return jsonify({"error": "Invalid index. Use 'sp500', 'nasdaq100', 'nikkei225', 'all', or 'us_all'"}), 400
+    if index not in ("sp500", "nasdaq100", "nikkei225", "growth250", "all", "us_all", "japan_all"):
+        return jsonify({"error": "Invalid index"}), 400
     if not (1 <= top_n <= 100):
         return jsonify({"error": "top_n must be between 1 and 100"}), 400
 

@@ -139,11 +139,15 @@
       <span id="statusText" class="text-xs sm:text-sm text-slate-500 dark:text-gray-400 basis-full sm:basis-auto"></span>
     </div>
 
-    <!-- Index Tabs (Japan page: nikkei225 only — hidden since single tab) -->
+    <!-- Index Tabs (Japan page: 日経225 + グロース250) -->
     <div id="indexTabs" class="hidden flex bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-1 gap-1">
       <button id="tabNK225" onclick="switchTab('nikkei225')"
         class="flex-1 px-2 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab active">
         日経225
+      </button>
+      <button id="tabGrowth250" onclick="switchTab('growth250')"
+        class="flex-1 px-2 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
+        グロース250
       </button>
     </div>
 
