@@ -264,7 +264,7 @@ def get_latest_sessions_by_index():
     """Get the most recent session for each index, with full results."""
     conn = _connect()
     results = {}
-    for idx in ("sp500", "nasdaq100", "nikkei225"):
+    for idx in ("sp500", "nasdaq100", "nikkei225", "growth250"):
         session = conn.execute(
             "SELECT * FROM screening_sessions WHERE index_name = ? ORDER BY id DESC LIMIT 1",
             (idx,),
@@ -358,7 +358,7 @@ def get_latest_sessions_by_index():
         ).fetchall()
         vg_ranking = [dict(r) for r in vg_rows] if vg_rows else []
 
-        index_label = {"sp500": "S&P 500", "nasdaq100": "NASDAQ 100", "nikkei225": "日経225"}[idx]
+        index_label = {"sp500": "S&P 500", "nasdaq100": "NASDAQ 100", "nikkei225": "日経225", "growth250": "グロース250"}.get(idx, idx)
         results[idx] = {
             "index": index_label,
             "total_screened": session["total_screened"],

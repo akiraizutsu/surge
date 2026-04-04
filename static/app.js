@@ -83,7 +83,7 @@ function initDarkMode() {
 function switchTab(idx) {
   activeTab = idx;
   document.querySelectorAll('#indexTabs .index-tab').forEach(btn => btn.classList.remove('active'));
-  const tabId = { sp500: 'tabSP500', nasdaq100: 'tabNAS100', nikkei225: 'tabNK225' }[idx];
+  const tabId = { sp500: 'tabSP500', nasdaq100: 'tabNAS100', nikkei225: 'tabNK225', growth250: 'tabGrowth250' }[idx];
   document.getElementById(tabId)?.classList.add('active');
 
   // Render data for this tab if available
@@ -119,7 +119,7 @@ async function runScreening() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        index: window.IS_JAPAN_PAGE ? 'nikkei225' : 'us_all',
+        index: window.IS_JAPAN_PAGE ? 'japan_all' : 'us_all',
         top_n: parseInt(document.getElementById('topN').value),
       }),
     });
@@ -176,7 +176,7 @@ function pollProgress() {
           } else {
             // Fallback: prefer page-appropriate index
             const preferred = window.IS_JAPAN_PAGE
-              ? ['nikkei225']
+              ? ['nikkei225', 'growth250']
               : ['sp500', 'nasdaq100'];
             const firstKey = preferred.find(k => allResults[k]) || Object.keys(allResults)[0];
             if (firstKey) {
@@ -1052,7 +1052,7 @@ async function init() {
             switchTab(activeTab);
           } else {
             const preferred = window.IS_JAPAN_PAGE
-              ? ['nikkei225']
+              ? ['nikkei225', 'growth250']
               : ['sp500', 'nasdaq100'];
             const firstKey = preferred.find(k => allResults[k]) || keys[0];
             switchTab(firstKey);
