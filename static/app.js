@@ -100,6 +100,7 @@ function isJapanIndex() {
 }
 
 function formatPrice(price) {
+  if (price == null || isNaN(price)) return '-';
   if (isJapanIndex()) return '¥' + Math.round(price).toLocaleString();
   return '$' + price;
 }
@@ -263,18 +264,26 @@ function renderDashboard(data) {
   // Sub-tabs and tables — always show; hide tab buttons when no data
   document.getElementById('subTabs').classList.remove('hidden');
   const hasContrarian = data.value_gap_ranking && data.value_gap_ranking.length > 0;
-  const hasTimeArb   = data.time_arb_ranking  && data.time_arb_ranking.length > 0;
-  const hasSmallcap  = data.smallcap_ranking   && data.smallcap_ranking.length > 0;
+  const hasTimeArb    = data.time_arb_ranking  && data.time_arb_ranking.length > 0;
+  const hasSmallcap   = data.smallcap_ranking  && data.smallcap_ranking.length > 0;
+  const hasRotation   = data.sector_rotation   && data.sector_rotation.length > 0;
+  const hasBreakout   = data.breakout_ranking  && data.breakout_ranking.length > 0;
   const contrarianBtn = document.getElementById('subTabContrarian');
   const timeArbBtn    = document.getElementById('subTabTimeArb');
   const smallcapBtn   = document.getElementById('subTabSmallcap');
+  const rotationBtn   = document.getElementById('subTabRotation');
+  const breakoutBtn   = document.getElementById('subTabBreakout');
   if (contrarianBtn) contrarianBtn.style.display = hasContrarian ? '' : 'none';
   if (timeArbBtn)    timeArbBtn.style.display    = hasTimeArb   ? '' : 'none';
   if (smallcapBtn)   smallcapBtn.style.display   = hasSmallcap  ? '' : 'none';
+  if (rotationBtn)   rotationBtn.style.display   = hasRotation  ? '' : 'none';
+  if (breakoutBtn)   breakoutBtn.style.display   = hasBreakout  ? '' : 'none';
   // Fall back to momentum if active tab has no data
   if (!hasContrarian && activeSubTab === 'contrarian') activeSubTab = 'momentum';
-  if (!hasTimeArb   && activeSubTab === 'time_arb')   activeSubTab = 'momentum';
-  if (!hasSmallcap  && activeSubTab === 'smallcap')   activeSubTab = 'momentum';
+  if (!hasTimeArb    && activeSubTab === 'time_arb')   activeSubTab = 'momentum';
+  if (!hasSmallcap   && activeSubTab === 'smallcap')   activeSubTab = 'momentum';
+  if (!hasRotation   && activeSubTab === 'rotation')   activeSubTab = 'momentum';
+  if (!hasBreakout   && activeSubTab === 'breakout')   activeSubTab = 'momentum';
   switchSubTab(activeSubTab);
 }
 
@@ -926,10 +935,10 @@ const TAG_COLORS = {
 function renderScoreBreakdown(components) {
   if (!components || components.length === 0) return '';
   const bars = components.map(c => {
-    const pct = c.percentile_value || 0;
+    const pct = Math.max(0, Math.min(isNaN(c.percentile_value) ? 0 : (c.percentile_value || 0), 100));
     const barColor = pct >= 70 ? '#10b981' : pct >= 40 ? '#f59e0b' : '#f43f5e';
     const fmtRaw = (name, val) => {
-      if (val == null) return '-';
+      if (val == null || isNaN(val)) return '-';
       if (name === 'vol_ratio') return val.toFixed(2) + 'x';
       if (name === 'rsi') return val.toFixed(1);
       return (val >= 0 ? '+' : '') + val.toFixed(2) + '%';
@@ -938,7 +947,7 @@ function renderScoreBreakdown(components) {
       <div class="flex items-center gap-2 py-1">
         <div class="w-20 text-[11px] text-slate-500 dark:text-gray-400 text-right shrink-0">${c.label}</div>
         <div class="flex-1 bg-slate-100 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
-          <div class="h-2 rounded-full transition-all" style="width:${Math.min(pct,100)}%;background:${barColor}"></div>
+          <div class="h-2 rounded-full transition-all" style="width:${pct}%;background:${barColor}"></div>
         </div>
         <div class="w-10 text-[11px] font-mono text-slate-700 dark:text-gray-300 text-right shrink-0">${pct.toFixed(0)}%ile</div>
         <div class="w-14 text-[11px] font-mono text-slate-400 dark:text-gray-500 text-right shrink-0">${fmtRaw(c.component_name, c.raw_value)}</div>
