@@ -1216,7 +1216,7 @@ function _renderCfModal(data) {
     if (!qContainer.querySelector('.cf-no-quarterly')) {
       const msg = document.createElement('div');
       msg.className = 'cf-no-quarterly flex items-center justify-center h-full text-xs text-slate-400 dark:text-gray-500';
-      msg.textContent = '四半期CF計算書はEDINET非掲載（年次のみ）';
+      msg.textContent = '四半期CFデータなし（JQUANTS_API_KEY未設定または取得エラー）';
       qContainer.appendChild(msg);
     }
   } else {

@@ -355,6 +355,67 @@ def fetch_quarterly(edinet_code):
     return _edinet_get(f"/companies/{edinet_code}/financials", {"period": "quarterly"})
 
 
+def fetch_quarterly_jquants(sec_code):
+    """Fetch quarterly CF from J-Quants /v2/fins/summary.
+
+    Returns list of {period, operating_cf, investing_cf, financing_cf, fcf} in 億円,
+    incremental (not cumulative). Empty list if API key missing or error.
+    """
+    api_key = os.environ.get("JQUANTS_API_KEY", "")
+    if not api_key:
+        return []
+    try:
+        code5 = sec_code + "0" if len(sec_code) == 4 else sec_code
+        r = requests.get(
+            "https://api.jquants.com/v2/fins/summary",
+            headers={"x-api-key": api_key},
+            params={"code": code5},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            return []
+        rows = r.json().get("data") or []
+
+        # Group by fiscal year, sort by period type order
+        _order = {"1Q": 1, "2Q": 2, "3Q": 3, "FY": 4}
+        rows = [row for row in rows if row.get("CFO") not in (None, "")]
+        rows.sort(key=lambda x: (x.get("CurFYSt", ""), _order.get(x.get("CurPerType", ""), 9)))
+
+        result = []
+        prev_fy, prev_cfo, prev_cfi, prev_cff = None, 0, 0, 0
+        for row in rows:
+            fy_st = row.get("CurFYSt", "")[:7]  # "2024-04"
+            ptype = row.get("CurPerType", "")
+            if ptype not in ("1Q", "2Q", "3Q", "FY"):
+                continue
+
+            cfo_cum = float(row.get("CFO") or 0)
+            cfi_cum = float(row.get("CFI") or 0)
+            cff_cum = float(row.get("CFF") or 0)
+
+            if fy_st != prev_fy:
+                prev_fy, prev_cfo, prev_cfi, prev_cff = fy_st, 0, 0, 0
+
+            cfo = cfo_cum - prev_cfo
+            cfi = cfi_cum - prev_cfi
+            cff = cff_cum - prev_cff
+            prev_cfo, prev_cfi, prev_cff = cfo_cum, cfi_cum, cff_cum
+
+            fy_label = fy_st[:4] + "/" + fy_st[5:7]
+            period_label = f"{fy_label} {ptype}"
+            result.append({
+                "period":       period_label,
+                "operating_cf": round(cfo / _UNIT_DIV, 1),
+                "investing_cf": round(cfi / _UNIT_DIV, 1),
+                "financing_cf": round(cff / _UNIT_DIV, 1),
+                "fcf":          round(cfo / _UNIT_DIV, 1),
+            })
+
+        return result[-12:]  # 直近12四半期（3年分）
+    except Exception:
+        return []
+
+
 def _sc(v):
     """Scale raw JPY → 億円."""
     return round(v / _UNIT_DIV, 1) if v is not None else None
@@ -454,36 +515,13 @@ def _build_cf_payload(ticker):
     # Company name: prefer cached name from search, else fallback
     company_name = _edinet_code_cache.get(sec_code + "_name") or ticker
 
-    # 3. Quarterly financials
-    quarterly_raw = fetch_quarterly(edinet_code)
-    quarterly_rows = _extract_rows(quarterly_raw)
+    # 3. Quarterly CF from J-Quants (replaces empty EDINET quarterly)
+    quarterly = fetch_quarterly_jquants(sec_code)
 
     # 4. Build timeline
     timeline = build_timeline(annual_rows)
     if not timeline:
         return None
-
-    # 5. Quarterly list (last 8 quarters)
-    # EDINET quarterly CF is cumulative from fiscal year start → convert to incremental
-    quarterly = []
-    prev_fy, prev_op_cum = None, 0
-    for item in sorted(quarterly_rows, key=lambda x: (x.get("fiscal_year") or 0, x.get("quarter") or 0)):
-        fy = item.get("fiscal_year")
-        q  = item.get("quarter", "")
-        op_cum = item.get("cf_operating")
-
-        if fy != prev_fy:          # new fiscal year → reset cumulative base
-            prev_fy, prev_op_cum = fy, 0
-
-        op_incr = (op_cum - prev_op_cum) if op_cum is not None else None
-        prev_op_cum = op_cum or prev_op_cum
-
-        quarterly.append({
-            "period":       f"{fy}Q{q}",
-            "operating_cf": _sc(op_incr),
-            "fcf":          _sc(op_incr),
-        })
-    quarterly = quarterly[-8:]
 
     # 6. Summary & M&A capacity
     summary     = calc_summary(timeline)
