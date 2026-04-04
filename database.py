@@ -178,6 +178,9 @@ def init_db():
         _add_column_if_missing(conn, "edinet_company_cache", "fin_fetched_at", "TEXT")
         # Sprint 2: market regime stored per session
         _add_column_if_missing(conn, "screening_sessions", "regime_json", "TEXT")
+        # Sprint 3: quality score and entry difficulty
+        _add_column_if_missing(conn, "screening_results", "quality_score", "REAL")
+        _add_column_if_missing(conn, "screening_results", "entry_difficulty", "TEXT")
 
     conn.close()
 
@@ -224,8 +227,9 @@ def save_results(session_id, ranking):
                     short_pct_of_float, short_ratio, shares_short, shares_short_prior_month,
                     float_shares, short_change_pct, squeeze_score,
                     high_52w, low_52w, dist_from_high, bb_width,
-                    earnings_date, days_to_earnings
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    earnings_date, days_to_earnings,
+                    quality_score, entry_difficulty
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     session_id, r.get("rank"), r.get("ticker"), r.get("name"),
                     r.get("sector"), r.get("price"), r.get("momentum_score"),
@@ -245,6 +249,7 @@ def save_results(session_id, ranking):
                     r.get("squeeze_score"),
                     t.get("high_52w"), t.get("low_52w"), t.get("dist_from_high"), t.get("bb_width"),
                     f.get("earnings_date"), f.get("days_to_earnings"),
+                    r.get("quality_score"), r.get("entry_difficulty"),
                 ),
             )
             result_id = cur.lastrowid
@@ -426,6 +431,9 @@ def get_latest_sessions_by_index():
                     "float_shares": r["float_shares"],
                     "short_change_pct": r["short_change_pct"],
                 },
+                # Sprint 3
+                "quality_score": r["quality_score"] if "quality_score" in r.keys() else None,
+                "entry_difficulty": r["entry_difficulty"] if "entry_difficulty" in r.keys() else None,
             })
 
         # Build sector distribution

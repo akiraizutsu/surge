@@ -15,6 +15,7 @@ import scoring_service
 import tagging_service
 import questions_service
 import regime_service
+import quality_service
 
 warnings.filterwarnings("ignore")
 
@@ -444,8 +445,10 @@ def screen_momentum(tickers, sectors, progress_cb=None, is_japan=False):
             vol_20d_avg = volume.iloc[-20:].mean()
             vol_ratio = vol_5d_avg / vol_20d_avg if vol_20d_avg > 0 else 1.0
 
+            ma_25 = close.iloc[-25:].mean() if len(close) >= 25 else current_price
             ma_50 = close.iloc[-50:].mean() if len(close) >= 50 else current_price
             ma_200 = close.iloc[-200:].mean() if len(close) >= 200 else current_price
+            ma25_dev = (current_price / ma_25 - 1) * 100 if ma_25 > 0 else 0
             ma50_dev = (current_price / ma_50 - 1) * 100
             ma200_dev = (current_price / ma_200 - 1) * 100
 
@@ -497,6 +500,17 @@ def screen_momentum(tickers, sectors, progress_cb=None, is_japan=False):
             else:
                 rs_label = "sector_driven"
 
+            # Sprint 3: quality score (computed from raw OHLCV here while df is in scope)
+            _quality = quality_service.compute_quality(
+                df=df,
+                momentum_score=0,   # placeholder; real score assigned later after ranking
+                ma50_dev=float(ma50_dev),
+                ma25_dev=float(ma25_dev),
+                bb_width=float(bb_width),
+                days_to_earnings=None,  # fetched later in get_fundamentals
+                rsi=float(rsi_val),
+            )
+
             results.append({
                 "ticker": ticker,
                 "sector": stock_sector,
@@ -506,6 +520,7 @@ def screen_momentum(tickers, sectors, progress_cb=None, is_japan=False):
                 "ret_1m": round(float(ret_1m), 2),
                 "ret_3m": round(float(ret_3m), 2),
                 "vol_ratio": round(float(vol_ratio), 2),
+                "ma25_dev": round(float(ma25_dev), 2),
                 "ma50_dev": round(float(ma50_dev), 2),
                 "ma200_dev": round(float(ma200_dev), 2),
                 "macd_hist": round(float(macd_hist_pct), 4),
@@ -522,6 +537,9 @@ def screen_momentum(tickers, sectors, progress_cb=None, is_japan=False):
                 "is_breakout": is_breakout,
                 "bb_width": bb_width,
                 "bb_squeeze": bb_squeeze,
+                # Sprint 3 quality (earnings_days not yet available here)
+                "_quality_components": _quality["quality_components"],
+                "_quality_base_score": _quality["quality_score"],
             })
         except Exception:
             continue
@@ -1258,6 +1276,27 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
     for i, row in sq_df.iterrows():
         val = row.get("squeeze_score")
         ranking[i]["squeeze_score"] = round(float(val), 1) if pd.notna(val) else None
+
+    # ── Sprint 3: Quality scores (finalize with real momentum_score + earnings) ─
+    _result_map = {r["ticker"]: r for r in results}
+    for item in ranking:
+        ticker = item["ticker"]
+        r = _result_map.get(ticker, {})
+        fund = fund_map.get(ticker, {})
+        base_comps = r.get("_quality_components", {})
+        q = quality_service.finalize_quality(
+            base_components=base_comps,
+            momentum_score=item["momentum_score"],
+            ma50_dev=r.get("ma50_dev", 0),
+            ma25_dev=r.get("ma25_dev", 0),
+            bb_width=r.get("bb_width", 8),
+            days_to_earnings=fund.get("days_to_earnings"),
+            rsi=r.get("rsi", 50),
+        )
+        item["quality_score"] = q["quality_score"]
+        item["quality_components"] = q["quality_components"]
+        item["entry_difficulty"] = q["entry_difficulty"]
+        item["technicals"]["ma25_dev"] = r.get("ma25_dev")
 
     # ── Sprint 1: Tags & Questions ────────────────────────────────────────────
     for item in ranking:

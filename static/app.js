@@ -18,6 +18,7 @@ let chartDoughnut = null;
 let chartScatter = null;
 let chartBreadth = null;
 let chartSectorRotation = null;
+let chartQualityMatrix = null;
 
 // ── Color System ──
 function hexToHsl(hex) {
@@ -268,22 +269,26 @@ function renderDashboard(data) {
   const hasSmallcap   = data.smallcap_ranking  && data.smallcap_ranking.length > 0;
   const hasRotation   = data.sector_rotation   && data.sector_rotation.length > 0;
   const hasBreakout   = data.breakout_ranking  && data.breakout_ranking.length > 0;
+  const hasQuality    = data.momentum_ranking  && data.momentum_ranking.some(r => r.quality_score != null);
   const contrarianBtn = document.getElementById('subTabContrarian');
   const timeArbBtn    = document.getElementById('subTabTimeArb');
   const smallcapBtn   = document.getElementById('subTabSmallcap');
   const rotationBtn   = document.getElementById('subTabRotation');
   const breakoutBtn   = document.getElementById('subTabBreakout');
+  const qualityBtn    = document.getElementById('subTabQuality');
   if (contrarianBtn) contrarianBtn.style.display = hasContrarian ? '' : 'none';
   if (timeArbBtn)    timeArbBtn.style.display    = hasTimeArb   ? '' : 'none';
   if (smallcapBtn)   smallcapBtn.style.display   = hasSmallcap  ? '' : 'none';
   if (rotationBtn)   rotationBtn.style.display   = hasRotation  ? '' : 'none';
   if (breakoutBtn)   breakoutBtn.style.display   = hasBreakout  ? '' : 'none';
+  if (qualityBtn)    qualityBtn.style.display    = hasQuality   ? '' : 'none';
   // Fall back to momentum if active tab has no data
   if (!hasContrarian && activeSubTab === 'contrarian') activeSubTab = 'momentum';
   if (!hasTimeArb    && activeSubTab === 'time_arb')   activeSubTab = 'momentum';
   if (!hasSmallcap   && activeSubTab === 'smallcap')   activeSubTab = 'momentum';
   if (!hasRotation   && activeSubTab === 'rotation')   activeSubTab = 'momentum';
   if (!hasBreakout   && activeSubTab === 'breakout')   activeSubTab = 'momentum';
+  if (!hasQuality    && activeSubTab === 'quality')    activeSubTab = 'momentum';
   switchSubTab(activeSubTab);
 }
 
@@ -418,12 +423,13 @@ function switchSubTab(tab) {
     momentum: 'subTabMomentum', contrarian: 'subTabContrarian',
     rotation: 'subTabRotation', breakout: 'subTabBreakout',
     time_arb: 'subTabTimeArb', smallcap: 'subTabSmallcap',
+    quality: 'subTabQuality',
   };
   document.getElementById(tabBtnMap[tab])?.classList.add('active');
 
   // Hide all sub-tab areas
   ['tableArea', 'contrarianTableArea', 'sectorRotationArea', 'breakoutTableArea',
-   'timeArbTableArea', 'smallcapTableArea'].forEach(id => {
+   'timeArbTableArea', 'smallcapTableArea', 'qualityMatrixArea'].forEach(id => {
     document.getElementById(id)?.classList.add('hidden');
   });
 
@@ -448,6 +454,9 @@ function switchSubTab(tab) {
   } else if (tab === 'smallcap') {
     document.getElementById('smallcapTableArea').classList.remove('hidden');
     if (screeningData && screeningData.smallcap_ranking) renderSmallcapTable(screeningData.smallcap_ranking);
+  } else if (tab === 'quality') {
+    document.getElementById('qualityMatrixArea').classList.remove('hidden');
+    if (screeningData && screeningData.momentum_ranking) renderQualityMatrix(screeningData.momentum_ranking);
   }
 }
 
@@ -699,6 +708,19 @@ function renderTable(ranking) {
       const urgency = f.days_to_earnings <= 3 ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-500' : 'bg-slate-100 dark:bg-gray-800 text-slate-500';
       status += `<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full ${urgency} font-medium">決算${f.days_to_earnings}日</span>`;
     }
+    if (r.entry_difficulty && r.entry_difficulty !== '様子見') {
+      const ED_BG = {
+        '良好':         'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
+        '押し待ち候補': 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400',
+        '初動監視':     'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400',
+        '追いかけ注意': 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400',
+        'ボラ高注意':   'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
+        '決算通過待ち': 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+        '地合い依存強め':'bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-400',
+      };
+      const edCls = ED_BG[r.entry_difficulty] || 'bg-gray-100 dark:bg-gray-800 text-gray-500';
+      status += `<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full ${edCls} font-medium">${r.entry_difficulty}</span>`;
+    }
 
     return `<tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors" onclick='showDetail(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
       ${starCell}
@@ -821,6 +843,151 @@ function renderBreakoutTable(ranking) {
       <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-sm whitespace-nowrap hidden sm:table-cell">${r.rsi}</td>
     </tr>`;
   }).join('');
+}
+
+// ── Quality Matrix Chart ──
+function renderQualityMatrix(ranking) {
+  const isDark = document.documentElement.classList.contains('dark');
+  const textColor = isDark ? '#9ca3af' : '#6b7280';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+
+  const ctx = document.getElementById('chartQualityMatrix').getContext('2d');
+  if (chartQualityMatrix) chartQualityMatrix.destroy();
+
+  // Build entry difficulty color map
+  const ED_COLOR = {
+    '良好':         '#10b981',
+    '押し待ち候補': '#0ea5e9',
+    '初動監視':     '#8b5cf6',
+    '追いかけ注意': '#f43f5e',
+    'ボラ高注意':   '#f97316',
+    '決算通過待ち': '#f59e0b',
+    '地合い依存強め':'#64748b',
+    '様子見':       '#9ca3af',
+  };
+
+  const points = ranking
+    .filter(r => r.quality_score != null && r.momentum_score != null)
+    .map(r => ({
+      x: r.momentum_score,
+      y: r.quality_score,
+      ticker: r.ticker,
+      entry_difficulty: r.entry_difficulty || '様子見',
+      color: ED_COLOR[r.entry_difficulty] || '#9ca3af',
+    }));
+
+  chartQualityMatrix = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        data: points.map(p => ({ x: p.x, y: p.y })),
+        backgroundColor: points.map(p => p.color + 'cc'),
+        borderColor: points.map(p => p.color),
+        borderWidth: 1.5,
+        pointRadius: 6,
+        pointHoverRadius: 9,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const p = points[ctx.dataIndex];
+              return `${p.ticker} | モメンタム:${p.x} 品質:${p.y.toFixed(1)} [${p.entry_difficulty}]`;
+            }
+          }
+        },
+      },
+      scales: {
+        x: {
+          min: 0, max: 100,
+          title: { display: true, text: 'モメンタムスコア', color: textColor },
+          grid: { color: gridColor },
+          ticks: { color: textColor },
+        },
+        y: {
+          min: 0, max: 100,
+          title: { display: true, text: '品質スコア', color: textColor },
+          grid: { color: gridColor },
+          ticks: { color: textColor },
+        },
+      },
+    },
+    plugins: [{
+      // Draw 4-quadrant lines at 50/50
+      id: 'quadrantLines',
+      beforeDraw(chart) {
+        const { ctx, chartArea, scales } = chart;
+        const xMid = scales.x.getPixelForValue(50);
+        const yMid = scales.y.getPixelForValue(50);
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)';
+        ctx.lineWidth = 1;
+        // Vertical line
+        ctx.beginPath();
+        ctx.moveTo(xMid, chartArea.top);
+        ctx.lineTo(xMid, chartArea.bottom);
+        ctx.stroke();
+        // Horizontal line
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, yMid);
+        ctx.lineTo(chartArea.right, yMid);
+        ctx.stroke();
+        // Quadrant labels
+        ctx.font = `11px system-ui`;
+        ctx.fillStyle = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)';
+        ctx.fillText('高品質 低モメンタム',  chartArea.left + 8,  chartArea.top + 16);
+        ctx.fillText('高品質 高モメンタム',  xMid + 8,           chartArea.top + 16);
+        ctx.fillText('低品質 低モメンタム',  chartArea.left + 8,  chartArea.bottom - 8);
+        ctx.fillText('低品質 高モメンタム',  xMid + 8,           chartArea.bottom - 8);
+        ctx.restore();
+      }
+    }],
+  });
+
+  // Render legend and table below chart
+  renderQualityLegend(points);
+}
+
+function renderQualityLegend(points) {
+  const el = document.getElementById('qualityMatrixLegend');
+  if (!el) return;
+
+  const ED_BG = {
+    '良好':         'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
+    '押し待ち候補': 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400',
+    '初動監視':     'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400',
+    '追いかけ注意': 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400',
+    'ボラ高注意':   'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
+    '決算通過待ち': 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+    '地合い依存強め':'bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-400',
+    '様子見':       'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-500',
+  };
+
+  // Group by entry_difficulty
+  const groups = {};
+  points.forEach(p => {
+    if (!groups[p.entry_difficulty]) groups[p.entry_difficulty] = [];
+    groups[p.entry_difficulty].push(p);
+  });
+
+  const order = ['良好','押し待ち候補','初動監視','追いかけ注意','ボラ高注意','決算通過待ち','地合い依存強め','様子見'];
+
+  el.innerHTML = order
+    .filter(label => groups[label] && groups[label].length > 0)
+    .map(label => {
+      const cls = ED_BG[label] || 'bg-gray-100 dark:bg-gray-800 text-gray-500';
+      const tickers = groups[label].map(p => p.ticker).join(', ');
+      return `<div class="flex items-start gap-2 py-1.5 border-b border-slate-100 dark:border-gray-800 last:border-0">
+        <span class="shrink-0 inline-block px-2 py-0.5 text-[11px] font-semibold rounded-full ${cls} whitespace-nowrap">${label}</span>
+        <span class="text-[11px] text-slate-500 dark:text-gray-400 leading-relaxed">${tickers}</span>
+      </div>`;
+    }).join('');
 }
 
 // ── Time Arbitrage Table ──
@@ -1016,6 +1183,35 @@ async function showDetail(stock) {
         <div class="text-lg font-semibold text-slate-900 dark:text-gray-100">${stock.sector}</div>
       </div>
     </div>
+
+    ${stock.quality_score != null ? `
+    <div class="grid grid-cols-2 gap-4 mb-6">
+      <div class="bg-emerald-50 dark:bg-emerald-950/20 rounded-xl p-4">
+        <div class="text-xs text-slate-500 dark:text-gray-400">品質スコア</div>
+        <div class="text-3xl font-bold text-emerald-600 dark:text-emerald-400">${stock.quality_score.toFixed(1)}</div>
+        ${stock.quality_components ? `<div class="mt-2 text-[10px] text-slate-400 dark:text-gray-500 space-y-0.5">
+          <div>ATR%: ${stock.quality_components.atr_pct != null ? stock.quality_components.atr_pct + '%' : '-'} &nbsp;上下出来高比: ${stock.quality_components.up_down_vol_ratio != null ? stock.quality_components.up_down_vol_ratio : '-'}</div>
+          <div>ギャップ率: ${stock.quality_components.gap_dep != null ? stock.quality_components.gap_dep : '-'} &nbsp;ヒゲ比率: ${stock.quality_components.wick_ratio != null ? stock.quality_components.wick_ratio : '-'}</div>
+        </div>` : ''}
+      </div>
+      <div class="bg-slate-50 dark:bg-gray-800 rounded-xl p-4 flex flex-col justify-between">
+        <div class="text-xs text-slate-500 dark:text-gray-400">エントリー難易度</div>
+        ${stock.entry_difficulty ? (() => {
+          const ED_BG = {
+            '良好':         'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
+            '押し待ち候補': 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400',
+            '初動監視':     'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400',
+            '追いかけ注意': 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400',
+            'ボラ高注意':   'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
+            '決算通過待ち': 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+            '地合い依存強め':'bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-400',
+            '様子見':       'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-500',
+          };
+          const edCls = ED_BG[stock.entry_difficulty] || 'bg-gray-100 dark:bg-gray-800 text-gray-500';
+          return `<span class="inline-block mt-2 px-2.5 py-1 text-sm font-semibold rounded-full ${edCls}">${stock.entry_difficulty}</span>`;
+        })() : '-'}
+      </div>
+    </div>` : ''}
 
     <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">テクニカル指標</h3>
     <div class="grid grid-cols-3 gap-3 mb-6">

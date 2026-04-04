@@ -241,6 +241,10 @@
         class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
         小型優良株
       </button>
+      <button id="subTabQuality" onclick="switchSubTab('quality')"
+        class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
+        品質マトリクス
+      </button>
     </div>
 
     <!-- Momentum Table -->
@@ -404,6 +408,22 @@
           </thead>
           <tbody id="smallcapTableBody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Quality Matrix -->
+    <div id="qualityMatrixArea" class="hidden space-y-4">
+      <div class="mb-2 px-1 text-xs text-slate-400 dark:text-gray-500">
+        モメンタムスコア（横軸）× 品質スコア（縦軸）の4象限チャート。右上が「高モメンタム×高品質」の理想銘柄。色はエントリー難易度を表します。
+      </div>
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-4">
+        <div class="relative" style="height:420px">
+          <canvas id="chartQualityMatrix"></canvas>
+        </div>
+      </div>
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-4">
+        <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">エントリー難易度別銘柄一覧</h3>
+        <div id="qualityMatrixLegend" class="space-y-0"></div>
       </div>
     </div>
 
