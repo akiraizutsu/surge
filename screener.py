@@ -11,6 +11,10 @@ import pandas as pd
 import requests
 import yfinance as yf
 
+import scoring_service
+import tagging_service
+import questions_service
+
 warnings.filterwarnings("ignore")
 
 # ── EDINET DB helpers (for Nikkei 225 data enrichment) ───────────────────────
@@ -1159,6 +1163,7 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
             "sector": row["sector"],
             "price": row["price"],
             "momentum_score": round(row["momentum_score"] * 100, 1),
+            "score_components": scoring_service.extract_score_components(row),
             "technicals": {
                 "ret_1d": row["ret_1d"],
                 "ret_1w": row["ret_1w"],
@@ -1252,6 +1257,32 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
     for i, row in sq_df.iterrows():
         val = row.get("squeeze_score")
         ranking[i]["squeeze_score"] = round(float(val), 1) if pd.notna(val) else None
+
+    # ── Sprint 1: Tags & Questions ────────────────────────────────────────────
+    for item in ranking:
+        t = item.get("technicals", {})
+        f = item.get("fundamentals", {})
+        si = item.get("short_interest", {})
+        flat = {
+            "ticker": item["ticker"],
+            "momentum_score": item["momentum_score"],
+            "price": item["price"],
+            "ret_1m": t.get("ret_1m"),
+            "ret_3m": t.get("ret_3m"),
+            "vol_ratio": t.get("vol_ratio"),
+            "rsi": t.get("rsi"),
+            "dist_from_high": t.get("dist_from_high"),
+            "bb_squeeze": t.get("bb_squeeze"),
+            "is_breakout": t.get("is_breakout"),
+            "rs_label": t.get("rs_label"),
+            "high_52w": t.get("high_52w"),
+            "days_to_earnings": f.get("days_to_earnings"),
+            "short_ratio": si.get("short_ratio"),
+            "short_pct_of_float": si.get("short_pct_of_float"),
+        }
+        tags = tagging_service.assign_tags(flat)
+        item["tags"] = tags
+        item["questions"] = questions_service.generate_questions(flat, tags)
 
     # Breakout candidates (within 5% of 52W high or BB squeeze)
     breakout_candidates = [r for r in results if r.get("dist_from_high") is not None and (r["dist_from_high"] >= -5 or r.get("bb_squeeze"))]

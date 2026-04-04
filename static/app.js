@@ -870,7 +870,79 @@ document.querySelectorAll('.sortable').forEach(th => {
 });
 
 // ── Detail Modal ──
-function showDetail(stock) {
+// ── Sprint 1 helpers ──────────────────────────────────────────────────────────
+
+const TAG_COLORS = {
+  '出来高先行型':    'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800',
+  '高値更新初動型':  'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800',
+  'BB圧縮ブレイク型':'bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800',
+  '押し目継続型':    'bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800',
+  '短期過熱型':      'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800',
+  '決算先回り型':    'bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800',
+  '需給主導型':      'bg-pink-50 dark:bg-pink-950/30 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800',
+  '指数逆行強者':    'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800',
+  'リバーサル初期型':'bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-400 border border-slate-200 dark:border-gray-700',
+};
+
+function renderScoreBreakdown(components) {
+  if (!components || components.length === 0) return '';
+  const bars = components.map(c => {
+    const pct = c.percentile_value || 0;
+    const barColor = pct >= 70 ? '#10b981' : pct >= 40 ? '#f59e0b' : '#f43f5e';
+    const fmtRaw = (name, val) => {
+      if (val == null) return '-';
+      if (name === 'vol_ratio') return val.toFixed(2) + 'x';
+      if (name === 'rsi') return val.toFixed(1);
+      return (val >= 0 ? '+' : '') + val.toFixed(2) + '%';
+    };
+    return `
+      <div class="flex items-center gap-2 py-1">
+        <div class="w-20 text-[11px] text-slate-500 dark:text-gray-400 text-right shrink-0">${c.label}</div>
+        <div class="flex-1 bg-slate-100 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+          <div class="h-2 rounded-full transition-all" style="width:${Math.min(pct,100)}%;background:${barColor}"></div>
+        </div>
+        <div class="w-10 text-[11px] font-mono text-slate-700 dark:text-gray-300 text-right shrink-0">${pct.toFixed(0)}%ile</div>
+        <div class="w-14 text-[11px] font-mono text-slate-400 dark:text-gray-500 text-right shrink-0">${fmtRaw(c.component_name, c.raw_value)}</div>
+      </div>`;
+  }).join('');
+  return `
+    <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-2 tracking-wider">スコア内訳</h3>
+    <div class="bg-slate-50 dark:bg-gray-800/50 rounded-xl p-3 mb-5">${bars}</div>`;
+}
+
+function renderTagSection(tags) {
+  if (!tags || tags.length === 0) return '';
+  const badges = tags.map(tag => {
+    const cls = TAG_COLORS[tag.tag_name] || 'bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-400 border border-slate-200 dark:border-gray-700';
+    const conf = tag.confidence ? `<span class="opacity-60 text-[9px]"> ${(tag.confidence * 100).toFixed(0)}%</span>` : '';
+    const reason = tag.reason_text ? ` title="${tag.reason_text.replace(/"/g, '&quot;')}"` : '';
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium cursor-help ${cls}"${reason}>${tag.tag_name}${conf}</span>`;
+  }).join(' ');
+
+  const details = tags.map(tag => `
+    <div class="text-[11px] text-slate-500 dark:text-gray-400 leading-relaxed py-1 border-b border-slate-100 dark:border-gray-800 last:border-0">
+      <span class="font-medium text-slate-700 dark:text-gray-300">${tag.tag_name}</span> — ${tag.reason_text || ''}
+    </div>`).join('');
+
+  return `
+    <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-2 tracking-wider">選定理由タグ</h3>
+    <div class="mb-2 flex flex-wrap gap-1.5">${badges}</div>
+    <div class="bg-slate-50 dark:bg-gray-800/50 rounded-xl px-3 py-2 mb-5">${details}</div>`;
+}
+
+function renderQuestionsSection(questions) {
+  if (!questions || questions.length === 0) return '';
+  const items = questions.map((q, i) => `
+    <div class="flex gap-2.5 py-2 border-b border-slate-100 dark:border-gray-800 last:border-0">
+      <span class="shrink-0 w-5 h-5 rounded-full bg-primary-100 dark:bg-primary-950/50 text-primary-600 dark:text-primary-400 text-[10px] font-bold flex items-center justify-center mt-0.5">${i+1}</span>
+      <p class="text-[12px] text-slate-700 dark:text-gray-300 leading-relaxed">${q}</p>
+    </div>`).join('');
+  return `
+    <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-2 tracking-wider">確認論点</h3>
+    <div class="bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200 dark:border-amber-900/40 rounded-xl px-3 py-1 mb-5">${items}</div>`;
+}
+
+async function showDetail(stock) {
   const t = stock.technicals;
   const f = stock.fundamentals;
   const si = stock.short_interest || {};
@@ -880,7 +952,12 @@ function showDetail(stock) {
   const fmtPct = (v) => v != null ? (v > 0 ? '+' : '') + v + '%' : '-';
   const fmtVal = (v) => v != null && v !== 0 ? v : '-';
 
+  // ── Render static sections immediately (synchronous) ──────────────────────
   document.getElementById('modalContent').innerHTML = `
+    <div id="explainSection" class="mb-2">
+      <div class="text-[11px] text-slate-400 dark:text-gray-500 py-3 text-center">分析データを読み込み中...</div>
+    </div>
+
     <div class="grid grid-cols-2 gap-4 mb-6">
       <div class="bg-primary-50 dark:bg-primary-950/30 rounded-xl p-4">
         <div class="text-xs text-slate-500 dark:text-gray-400">モメンタムスコア</div>
@@ -976,6 +1053,34 @@ function showDetail(stock) {
 
   document.getElementById('modal').classList.remove('hidden');
   document.getElementById('modal').classList.add('flex');
+
+  // ── Load score breakdown / tags / questions ───────────────────────────────
+  // Use embedded data if available (fresh screening), otherwise fetch from API
+  let explainData = null;
+  if (stock.score_components && stock.score_components.length > 0) {
+    explainData = {
+      score_components: stock.score_components,
+      tags: stock.tags || [],
+      questions: stock.questions || [],
+    };
+  } else {
+    try {
+      const resp = await fetch(`/api/stock/${encodeURIComponent(stock.ticker)}/explain`);
+      if (resp.ok) explainData = await resp.json();
+    } catch (e) { /* silently ignore network errors */ }
+  }
+
+  const explainEl = document.getElementById('explainSection');
+  if (explainEl) {
+    if (explainData) {
+      explainEl.innerHTML =
+        renderScoreBreakdown(explainData.score_components) +
+        renderTagSection(explainData.tags) +
+        renderQuestionsSection(explainData.questions);
+    } else {
+      explainEl.innerHTML = '';  // hide loading spinner if no data
+    }
+  }
 }
 
 function closeModal() {
