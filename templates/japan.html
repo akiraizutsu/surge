@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SURGE — 日本株</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <link rel="stylesheet" href="/static/style.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        fontFamily: {
+          sans: ['"Zen Kaku Gothic New"', 'Ubuntu', 'system-ui', 'sans-serif'],
+          mono: ['Ubuntu Mono', 'ui-monospace', 'monospace'],
+        },
+        extend: {
+          letterSpacing: {
+            brand: '0.08em',
+          },
+          colors: {
+            primary: {
+              50:  'hsl(var(--hue) 90% 96%)',
+              100: 'hsl(var(--hue) 85% 90%)',
+              200: 'hsl(var(--hue) 80% 80%)',
+              300: 'hsl(var(--hue) 75% 68%)',
+              400: 'hsl(var(--hue) 70% 55%)',
+              500: 'hsl(var(--hue) 65% 45%)',
+              600: 'hsl(var(--hue) 65% 38%)',
+              700: 'hsl(var(--hue) 60% 30%)',
+              800: 'hsl(var(--hue) 55% 23%)',
+              900: 'hsl(var(--hue) 50% 17%)',
+              950: 'hsl(var(--hue) 45% 10%)',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <script>window.IS_JAPAN_PAGE = true;</script>
+</head>
+<body class="text-slate-900 dark:text-gray-100 min-h-screen transition-colors">
+
+  <!-- Background decorations (dark mode only) -->
+  <div id="bgGrid" class="fixed inset-0 bg-grid-surge pointer-events-none z-0 opacity-0 dark-bg-visible"></div>
+  <div id="bgOrb1" class="fixed pointer-events-none z-0 rounded-full bg-orb-1 dark-bg-visible opacity-0"
+       style="width:28rem;height:28rem;top:-8rem;left:-6rem;filter:blur(80px);"></div>
+  <div id="bgOrb2" class="fixed pointer-events-none z-0 rounded-full bg-orb-2 dark-bg-visible opacity-0"
+       style="width:20rem;height:20rem;bottom:-4rem;right:-4rem;filter:blur(80px);"></div>
+  <!-- Sparkline at bottom -->
+  <div id="bgSparkline" class="fixed bottom-0 left-0 right-0 h-36 pointer-events-none z-0 dark-bg-visible opacity-0 overflow-hidden">
+    <svg viewBox="0 0 800 144" preserveAspectRatio="none" class="w-full h-full"
+         fill="none" stroke-width="1.5" stroke-linecap="round">
+      <polyline style="stroke:hsl(var(--hue,187) 70% 55% / 0.10);"
+        points="0,120 50,100 100,108 150,85 200,92 250,70 300,78 350,55 400,62 450,48 500,58 550,40 600,52 650,35 700,42 750,28 800,38"/>
+      <line x1="50"  y1="95"  x2="50"  y2="105" style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+      <line x1="150" y1="80"  x2="150" y2="90"  style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+      <line x1="250" y1="65"  x2="250" y2="75"  style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+      <line x1="350" y1="50"  x2="350" y2="60"  style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+      <line x1="450" y1="43"  x2="450" y2="53"  style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+      <line x1="550" y1="35"  x2="550" y2="45"  style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+      <line x1="650" y1="30"  x2="650" y2="40"  style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+      <line x1="750" y1="23"  x2="750" y2="33"  style="stroke:hsl(var(--hue,187) 70% 55% / 0.08);" stroke-width="8"/>
+    </svg>
+  </div>
+
+  <!-- Header -->
+  <header class="relative z-10 bg-primary-600/90 dark:bg-primary-950/80 dark:backdrop-blur-md text-white shadow-sm">
+    <div class="mx-auto px-4 sm:px-8 py-3 sm:py-4 flex items-center justify-between gap-2">
+      <!-- Logo group -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <div class="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-xl shrink-0"
+             style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2);">
+          <svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <div class="flex items-baseline gap-2">
+          <h1 class="text-lg sm:text-xl font-bold tracking-brand uppercase">SURGE</h1>
+          <span class="text-xs opacity-55 font-normal hidden sm:inline" style="letter-spacing:0.05em;">日本株 Momentum</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 sm:gap-4">
+        <!-- Page switcher -->
+        <a href="/us" class="hidden sm:inline-flex items-center gap-1 text-xs font-medium opacity-70 hover:opacity-100 transition-opacity px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">
+          US Stocks →
+        </a>
+        <a href="/us" class="sm:hidden text-xs font-medium opacity-70 hover:opacity-100 transition-opacity px-2 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">
+          US →
+        </a>
+        <div class="flex items-center gap-1.5">
+          <label for="colorPicker" class="text-xs sm:text-sm opacity-80 hidden sm:inline">テーマ</label>
+          <input type="color" id="colorPicker" value="#06b6d4"
+            class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg cursor-pointer border-2 border-white/30 bg-transparent">
+        </div>
+        <button id="darkToggle" onclick="toggleDark()"
+          class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+          aria-label="ダークモード切替">
+          <span id="darkIcon">&#9790;</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="relative z-10 mx-auto px-4 sm:px-8 py-4 sm:py-8 space-y-4 sm:space-y-8">
+
+    <!-- Controls -->
+    <div class="flex items-center gap-2 sm:gap-4 flex-wrap">
+      <button id="btnRun" onclick="runScreening()"
+        class="inline-flex items-center justify-center h-9 sm:h-10 px-4 sm:px-6 text-sm sm:text-base font-medium bg-primary-500 text-white rounded-lg hover:bg-primary-700 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+        スクリーニング実行
+      </button>
+      <button id="btnWatchlist" onclick="toggleWatchlistView()"
+        class="inline-flex items-center justify-center h-9 sm:h-10 px-3 sm:px-4 text-xs sm:text-sm font-medium border border-slate-200 dark:border-gray-700 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+        aria-label="ウォッチリスト表示切替">
+        <span class="mr-1">&#9733;</span> <span class="hidden sm:inline">ウォッチリスト</span><span class="sm:hidden">WL</span>
+      </button>
+      <div class="flex items-center gap-1.5 sm:gap-2 leading-normal">
+        <label for="topN" class="text-xs sm:text-sm text-slate-500 dark:text-gray-400">上位</label>
+        <select id="topN" class="rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:ring-2 focus:ring-primary-500/50">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="30">30</option>
+          <option value="50">50</option>
+        </select>
+        <span class="text-xs sm:text-sm text-slate-500 dark:text-gray-400">銘柄</span>
+      </div>
+      <div id="progressArea" class="hidden flex items-center gap-2 sm:gap-3 flex-1 min-w-[140px] sm:min-w-[200px] basis-full sm:basis-auto">
+        <div class="flex-1 bg-slate-200 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
+          <div id="progressBar" class="bg-primary-500 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <span id="progressText" class="text-xs sm:text-sm text-slate-500 dark:text-gray-400 whitespace-nowrap">0%</span>
+      </div>
+      <span id="statusText" class="text-xs sm:text-sm text-slate-500 dark:text-gray-400 basis-full sm:basis-auto"></span>
+    </div>
+
+    <!-- Index Tabs (Japan page: nikkei225 only — hidden since single tab) -->
+    <div id="indexTabs" class="hidden flex bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-1 gap-1">
+      <button id="tabNK225" onclick="switchTab('nikkei225')"
+        class="flex-1 px-2 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab active">
+        日経225
+      </button>
+    </div>
+
+    <!-- Summary Cards -->
+    <div id="summaryCards" class="hidden grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div class="card">
+        <div class="text-sm text-slate-500 dark:text-gray-400">分析銘柄数</div>
+        <div id="cardScreened" class="text-2xl font-bold text-primary-600 dark:text-primary-400">-</div>
+      </div>
+      <div class="card">
+        <div class="text-sm text-slate-500 dark:text-gray-400">平均スコア</div>
+        <div id="cardAvgScore" class="text-2xl font-bold text-primary-600 dark:text-primary-400">-</div>
+      </div>
+      <div class="card">
+        <div class="text-sm text-slate-500 dark:text-gray-400">騰落比率</div>
+        <div id="cardBreadth" class="text-2xl font-bold text-primary-600 dark:text-primary-400">-</div>
+        <div id="cardBreadthDetail" class="text-xs text-slate-400 dark:text-gray-500 mt-1"></div>
+      </div>
+      <div class="card">
+        <div class="text-sm text-slate-500 dark:text-gray-400">過熱銘柄 (RSI&gt;70)</div>
+        <div id="cardOverheat" class="text-2xl font-bold text-rose-400">-</div>
+      </div>
+      <div class="card">
+        <div class="text-sm text-slate-500 dark:text-gray-400">ゴールデンクロス</div>
+        <div id="cardGolden" class="text-2xl font-bold text-emerald-500">-</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div id="chartsArea" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="card">
+        <h3 class="text-sm font-medium text-slate-500 dark:text-gray-400 mb-4">モメンタムスコア ランキング</h3>
+        <div class="relative" style="height: 400px">
+          <canvas id="chartBar"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="text-sm font-medium text-slate-500 dark:text-gray-400 mb-4">セクター分布</h3>
+        <div class="relative flex items-center justify-center" style="height: 400px">
+          <canvas id="chartDoughnut"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- RSI Scatter -->
+    <div id="rsiChartArea" class="hidden">
+      <div class="card">
+        <h3 class="text-sm font-medium text-slate-500 dark:text-gray-400 mb-4">RSI vs 1ヶ月リターン</h3>
+        <div class="relative" style="height: 350px">
+          <canvas id="chartScatter"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Breadth Chart (ADL) -->
+    <div id="breadthChartArea" class="hidden">
+      <div class="card">
+        <h3 class="text-sm font-medium text-slate-500 dark:text-gray-400 mb-4">騰落線 (Advance-Decline Line)</h3>
+        <div class="relative" style="height: 300px">
+          <canvas id="chartBreadth"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sub-tabs -->
+    <div id="subTabs" class="hidden flex bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-1 gap-1">
+      <button id="subTabMomentum" onclick="switchSubTab('momentum')"
+        class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab active">
+        モメンタム
+      </button>
+      <button id="subTabContrarian" onclick="switchSubTab('contrarian')"
+        class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
+        逆張り候補
+      </button>
+      <button id="subTabRotation" onclick="switchSubTab('rotation')"
+        class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
+        セクター回転
+      </button>
+      <button id="subTabBreakout" onclick="switchSubTab('breakout')"
+        class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
+        ブレイクアウト
+      </button>
+      <button id="subTabTimeArb" onclick="switchSubTab('time_arb')"
+        class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
+        タイム裁定
+      </button>
+      <button id="subTabSmallcap" onclick="switchSubTab('smallcap')"
+        class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
+        小型優良株
+      </button>
+    </div>
+
+    <!-- Momentum Table -->
+    <div id="tableArea" class="hidden">
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50">
+              <th scope="col" class="px-1.5 sm:px-2 py-2 sm:py-3 text-center text-xs font-medium text-slate-500 tracking-wider w-8"></th>
+              <th scope="col" class="sortable px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap" data-key="rank">#</th>
+              <th scope="col" class="sortable px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap" data-key="ticker">銘柄</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider hidden lg:table-cell">名称</th>
+              <th scope="col" class="sortable px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden md:table-cell" data-key="sector">セクター</th>
+              <th scope="col" class="sortable px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap hidden sm:table-cell" data-key="price">株価</th>
+              <th scope="col" class="sortable px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap" data-key="momentum_score">スコア</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">状態</th>
+              <th scope="col" class="sortable px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell" data-key="squeeze_score">SQ</th>
+              <th scope="col" class="sortable px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell" data-key="ret_1d">1D</th>
+              <th scope="col" class="sortable px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell" data-key="ret_1w">1W</th>
+              <th scope="col" class="sortable px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap" data-key="ret_1m">1M</th>
+              <th scope="col" class="sortable px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap hidden sm:table-cell" data-key="ret_3m">3M</th>
+              <th scope="col" class="sortable px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap hidden sm:table-cell" data-key="rsi">RSI</th>
+              <th scope="col" class="sortable px-4 py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden lg:table-cell" data-key="vol_ratio">出来高比</th>
+              <th scope="col" class="sortable px-4 py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden lg:table-cell" data-key="rs_1m">RS1M</th>
+              <th scope="col" class="sortable px-4 py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden lg:table-cell" data-key="rs_3m">RS3M</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Contrarian Table -->
+    <div id="contrarianTableArea" class="hidden">
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50">
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">#</th>
+              <th scope="col" class="px-2 py-2 sm:py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap w-8"></th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">銘柄</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider hidden lg:table-cell">名称</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden md:table-cell">セクター</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">VGスコア</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">株価</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">目標株価</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">乖離</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">1M</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">RSI</th>
+              <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden lg:table-cell">PER予</th>
+              <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden lg:table-cell">EPS成長</th>
+              <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden lg:table-cell">売上成長</th>
+              <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">推奨</th>
+            </tr>
+          </thead>
+          <tbody id="contrarianTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Sector Rotation -->
+    <div id="sectorRotationArea" class="hidden space-y-4">
+      <div class="card">
+        <h3 class="text-sm font-medium text-slate-500 dark:text-gray-400 mb-4">セクターローテーション（X: 3Mリターン / Y: 1Mリターン）</h3>
+        <div class="relative" style="height: 400px">
+          <canvas id="chartSectorRotation"></canvas>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2 text-[10px] text-slate-400">
+          <span>右上: 加速</span><span>|</span><span>左上: 回復</span><span>|</span><span>右下: 減速</span><span>|</span><span>左下: 衰退</span>
+        </div>
+      </div>
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50">
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">セクター</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">ETF</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">1M平均</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">3M平均</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">RS平均</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">銘柄数</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">トレンド</th>
+            </tr>
+          </thead>
+          <tbody id="rotationTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Breakout Table -->
+    <div id="breakoutTableArea" class="hidden">
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50">
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">#</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">銘柄</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider hidden lg:table-cell">名称</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden md:table-cell">セクター</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">株価</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">52W高値</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">乖離</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">BB幅</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">状態</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">スコア</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">RSI</th>
+            </tr>
+          </thead>
+          <tbody id="breakoutTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Time Arbitrage Table -->
+    <div id="timeArbTableArea" class="hidden">
+      <div class="mb-3 px-1 text-xs text-slate-400 dark:text-gray-500">
+        設備投資CF急増（≥+20%）× 一過性赤字（純利益≥−15%）× 営業CFプラス の条件を満たす売り込まれた銘柄。機関投資家が短期業績悪化で手放したが、将来の種まきをしている可能性がある候補です。
+      </div>
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50">
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">#</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">銘柄</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider hidden lg:table-cell">名称</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden md:table-cell">セクター</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">株価</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">裁定スコア</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">設備投資成長</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">純利益変化</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">営業CF</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">1M</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">RSI</th>
+            </tr>
+          </thead>
+          <tbody id="timeArbTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Small-cap Momentum Table -->
+    <div id="smallcapTableArea" class="hidden">
+      <div class="mb-3 px-1 text-xs text-slate-400 dark:text-gray-500">
+        機関投資家が流動性の問題で参入できない小型・中型株の中でモメンタムが上昇している銘柄。スクリーニング対象のうちファンダメンタルズデータを取得できた銘柄が対象です。
+      </div>
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50">
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">#</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">銘柄</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider hidden lg:table-cell">名称</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden md:table-cell">セクター</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">株価</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">時価総額</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">スコア</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">1M</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">3M</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">RSI</th>
+            </tr>
+          </thead>
+          <tbody id="smallcapTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="modal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4" onclick="if(event.target===this)closeModal()">
+      <div class="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-xl border border-slate-200 dark:border-gray-800 shadow-xl max-w-2xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-y-auto">
+        <div class="p-4 sm:p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 id="modalTitle" class="text-xl font-bold text-slate-900 dark:text-gray-100"></h2>
+            <button onclick="closeModal()" class="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 text-2xl leading-none rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer" aria-label="閉じる">&times;</button>
+          </div>
+          <div id="modalContent"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CF Analysis Modal -->
+    <div id="cfModal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4" onclick="if(event.target===this)closeCfModal()">
+      <div class="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-xl border border-slate-200 dark:border-gray-800 shadow-xl max-w-3xl w-full max-h-[92vh] sm:max-h-[88vh] overflow-y-auto">
+        <div class="p-4 sm:p-6">
+          <!-- Header -->
+          <div class="flex items-center justify-between mb-1">
+            <h2 id="cfModalTitle" class="text-xl font-bold text-slate-900 dark:text-gray-100"></h2>
+            <button onclick="closeCfModal()" class="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 text-2xl leading-none rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer" aria-label="閉じる">&times;</button>
+          </div>
+          <div id="cfModalSubtitle" class="text-xs text-slate-400 dark:text-gray-500 mb-4"></div>
+
+          <!-- Loading -->
+          <div id="cfModalLoading" class="hidden flex flex-col items-center justify-center py-12 gap-3">
+            <div class="w-8 h-8 border-2 border-primary-400 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-sm text-slate-400">CFデータを取得中...</span>
+          </div>
+
+          <!-- Error -->
+          <div id="cfModalError" class="hidden text-center py-12 text-rose-400 text-sm"></div>
+
+          <!-- Content -->
+          <div id="cfModalContent" class="hidden space-y-6">
+
+            <!-- Summary cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="cfSummaryCards"></div>
+
+            <!-- M&A Capacity -->
+            <div id="cfMaArea" class="bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-100 dark:border-amber-900/30 p-4">
+              <div class="text-xs font-medium text-amber-700 dark:text-amber-400 mb-3 tracking-wider">M&A 実弾試算</div>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="cfMaCards"></div>
+            </div>
+
+            <!-- Annual CF bar chart -->
+            <div class="card">
+              <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3">CF 三区分（年次）</h3>
+              <div class="relative" style="height:260px">
+                <canvas id="cfChartAnnual"></canvas>
+              </div>
+            </div>
+
+            <!-- FCF bar chart -->
+            <div class="card">
+              <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3">営業CF / FCF（年次）</h3>
+              <div class="relative" style="height:200px">
+                <canvas id="cfChartFcf"></canvas>
+              </div>
+            </div>
+
+            <!-- Quarterly FCF -->
+            <div class="card">
+              <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3">営業CF（四半期・単体）</h3>
+              <div class="relative" style="height:180px">
+                <canvas id="cfChartQuarterly"></canvas>
+              </div>
+            </div>
+
+            <!-- Detail table -->
+            <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-gray-800">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50">
+                    <th class="px-3 py-2 text-left text-slate-500 whitespace-nowrap">期</th>
+                    <th class="px-3 py-2 text-right text-slate-500 whitespace-nowrap">営業CF</th>
+                    <th class="px-3 py-2 text-right text-slate-500 whitespace-nowrap">投資CF</th>
+                    <th class="px-3 py-2 text-right text-slate-500 whitespace-nowrap">財務CF</th>
+                    <th class="px-3 py-2 text-right text-slate-500 whitespace-nowrap">設備投資</th>
+                    <th class="px-3 py-2 text-right text-slate-500 whitespace-nowrap font-semibold">FCF</th>
+                  </tr>
+                </thead>
+                <tbody id="cfDetailTable"></tbody>
+              </table>
+            </div>
+
+            <!-- Refresh button -->
+            <div class="flex justify-end">
+              <button id="cfRefreshBtn" class="text-xs text-slate-400 dark:text-gray-500 hover:text-primary-500 transition-colors cursor-pointer" onclick="refreshCfData()">データを更新</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="text-center py-16 hidden">
+      <div class="w-16 h-16 bg-slate-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+        <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+      </div>
+      <h2 class="text-base font-medium text-slate-900 dark:text-gray-300 mb-1">まだスクリーニング結果がありません</h2>
+      <p class="text-sm text-slate-500 dark:text-gray-500">「スクリーニング実行」をクリックしてモメンタム分析を開始</p>
+    </div>
+
+  </main>
+
+  <footer class="text-center py-8 text-xs text-slate-400 dark:text-gray-600 border-t border-slate-200 dark:border-gray-800">
+    Surge &mdash; Yahoo Finance &mdash; 教育・研究目的のみ
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
