@@ -84,7 +84,7 @@ function switchTab(idx) {
   activeTab = idx;
   document.querySelectorAll('#indexTabs .index-tab').forEach(btn => btn.classList.remove('active'));
   const tabId = { sp500: 'tabSP500', nasdaq100: 'tabNAS100', nikkei225: 'tabNK225' }[idx];
-  document.getElementById(tabId).classList.add('active');
+  document.getElementById(tabId)?.classList.add('active');
 
   // Render data for this tab if available
   const data = allResults[idx];
@@ -96,7 +96,7 @@ function switchTab(idx) {
 }
 
 function isJapanIndex() {
-  return activeTab === 'nikkei225' || (screeningData && screeningData.index === '日経225');
+  return !!window.IS_JAPAN_PAGE;
 }
 
 function formatPrice(price) {
@@ -119,7 +119,7 @@ async function runScreening() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        index: 'all',
+        index: window.IS_JAPAN_PAGE ? 'nikkei225' : 'us_all',
         top_n: parseInt(document.getElementById('topN').value),
       }),
     });
@@ -174,8 +174,10 @@ function pollProgress() {
             renderDashboard(data);
             document.getElementById('statusText').textContent = '最終更新: ' + data.generated_at;
           } else {
-            // Fallback: prefer sp500 > nasdaq100 > nikkei225
-            const preferred = ['sp500', 'nasdaq100', 'nikkei225'];
+            // Fallback: prefer page-appropriate index
+            const preferred = window.IS_JAPAN_PAGE
+              ? ['nikkei225']
+              : ['sp500', 'nasdaq100'];
             const firstKey = preferred.find(k => allResults[k]) || Object.keys(allResults)[0];
             if (firstKey) {
               activeTab = firstKey;
@@ -1018,6 +1020,9 @@ function toggleWatchlistView() {
 
 // ── Init ──
 async function init() {
+  // Set default active tab based on page
+  activeTab = window.IS_JAPAN_PAGE ? 'nikkei225' : 'sp500';
+
   initDarkMode();
   await loadWatchlist();
 
@@ -1046,7 +1051,9 @@ async function init() {
           if (allResults[activeTab]) {
             switchTab(activeTab);
           } else {
-            const preferred = ['sp500', 'nasdaq100', 'nikkei225'];
+            const preferred = window.IS_JAPAN_PAGE
+              ? ['nikkei225']
+              : ['sp500', 'nasdaq100'];
             const firstKey = preferred.find(k => allResults[k]) || keys[0];
             switchTab(firstKey);
           }
