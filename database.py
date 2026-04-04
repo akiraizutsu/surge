@@ -165,6 +165,22 @@ def init_db():
                 question_text TEXT NOT NULL,
                 sort_order INTEGER DEFAULT 0
             );
+
+            CREATE TABLE IF NOT EXISTS backtest_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL REFERENCES screening_sessions(id),
+                horizon_days INTEGER NOT NULL,
+                top_n INTEGER NOT NULL,
+                benchmark_ticker TEXT,
+                avg_return REAL,
+                median_return REAL,
+                win_rate REAL,
+                benchmark_return REAL,
+                excess_return REAL,
+                sample_size INTEGER,
+                detail_json TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
         """)
 
         # ── Schema migrations: add columns to existing tables ──────────────
@@ -324,13 +340,83 @@ def get_stock_explain(ticker):
     }
 
 
-def get_sessions(limit=10):
+def get_sessions(limit=20):
+    """Return recent sessions with summary: top 3 tickers, avg score, regime label."""
+    import json
     conn = _connect()
-    rows = conn.execute(
+    sessions = conn.execute(
         "SELECT * FROM screening_sessions ORDER BY id DESC LIMIT ?", (limit,)
     ).fetchall()
+    result = []
+    for s in sessions:
+        row = dict(s)
+        # Top 3 tickers by rank
+        top = conn.execute(
+            "SELECT ticker, momentum_score FROM screening_results "
+            "WHERE session_id = ? ORDER BY rank LIMIT 3", (s["id"],)
+        ).fetchall()
+        row["top_tickers"] = [r["ticker"] for r in top]
+        row["avg_score"]   = round(sum(r["momentum_score"] for r in top if r["momentum_score"]) / max(len(top), 1), 1) if top else None
+        # Parse regime label from JSON
+        try:
+            regime = json.loads(s["regime_json"]) if s.get("regime_json") else None
+            row["regime_label"] = regime.get("label") if regime else None
+        except Exception:
+            row["regime_label"] = None
+        result.append(row)
     conn.close()
-    return [dict(r) for r in rows]
+    return result
+
+
+def save_backtest_result(bt: dict):
+    """Persist a backtest run result to DB. Returns inserted id."""
+    import json
+    conn = _connect()
+    with conn:
+        stats = bt.get("stats") or {}
+        cur = conn.execute(
+            """INSERT INTO backtest_results
+               (session_id, horizon_days, top_n, benchmark_ticker,
+                avg_return, median_return, win_rate, benchmark_return,
+                excess_return, sample_size, detail_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                bt["session_id"], bt["horizon_days"], bt["top_n"],
+                bt.get("benchmark_ticker"),
+                stats.get("avg_return"), stats.get("median_return"),
+                stats.get("win_rate"), stats.get("benchmark_return"),
+                stats.get("excess_return"), stats.get("sample_size"),
+                json.dumps(bt.get("detail", []), ensure_ascii=False),
+            ),
+        )
+        bt_id = cur.lastrowid
+    conn.close()
+    return bt_id
+
+
+def get_backtest_results(session_id=None, limit=50):
+    """Return backtest results, optionally filtered by session_id."""
+    import json
+    conn = _connect()
+    if session_id is not None:
+        rows = conn.execute(
+            "SELECT * FROM backtest_results WHERE session_id = ? ORDER BY id DESC LIMIT ?",
+            (session_id, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM backtest_results ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+    result = []
+    for r in rows:
+        row = dict(r)
+        try:
+            row["detail"] = json.loads(r["detail_json"]) if r["detail_json"] else []
+        except Exception:
+            row["detail"] = []
+        result.append(row)
+    conn.close()
+    return result
 
 
 def get_session_results(session_id):

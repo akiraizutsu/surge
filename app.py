@@ -30,7 +30,10 @@ from database import (
     get_edinet_cached_companies, save_edinet_companies,
     get_edinet_cached_financials, save_edinet_financials,
     get_stock_explain,
+    save_backtest_result, get_backtest_results,
 )
+import backtest_service
+from scoring_service import WEIGHT_PRESETS
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "surge-dev-fallback-key-change-in-prod")
@@ -396,6 +399,68 @@ def api_get_history_detail(session_id):
     if not results:
         return jsonify({"error": "Session not found"}), 404
     return jsonify(results)
+
+
+# ── Sprint 4: Backtest ────────────────────────────────────────────────────────
+
+@app.post("/api/backtest/run")
+def api_backtest_run():
+    """Run a backtest for a past screening session.
+
+    Body JSON: { session_id, horizon_days, top_n }
+    """
+    body = request.get_json(force=True, silent=True) or {}
+    session_id   = int(body.get("session_id", 0))
+    horizon_days = int(body.get("horizon_days", 20))
+    top_n        = int(body.get("top_n", 20))
+
+    # Validate
+    if session_id <= 0:
+        return jsonify({"error": "session_id required"}), 400
+    if horizon_days not in backtest_service.VALID_HORIZONS:
+        return jsonify({"error": f"horizon_days must be one of {backtest_service.VALID_HORIZONS}"}), 400
+
+    # Load session metadata + results from DB
+    sessions = get_sessions(limit=200)
+    sess = next((s for s in sessions if s["id"] == session_id), None)
+    if not sess:
+        return jsonify({"error": "Session not found"}), 404
+
+    results = get_session_results(session_id)
+    if not results:
+        return jsonify({"error": "No results for this session"}), 404
+
+    # Run in foreground (blocking) — typical yfinance call takes 1-5s
+    bt = backtest_service.run_backtest(
+        session_id=session_id,
+        horizon_days=horizon_days,
+        top_n=top_n,
+        index_name=sess["index_name"],
+        session_date_str=sess["generated_at"],
+        results=results,
+    )
+
+    # Persist if successful
+    if bt["stats"] is not None:
+        save_backtest_result(bt)
+
+    return jsonify(bt)
+
+
+@app.get("/api/backtest/results")
+def api_backtest_results():
+    """List past backtest results, optionally filtered by session_id."""
+    session_id = request.args.get("session_id", type=int)
+    rows = get_backtest_results(session_id=session_id, limit=50)
+    return jsonify(rows)
+
+
+# ── Sprint 4: Weight Presets ──────────────────────────────────────────────────
+
+@app.get("/api/weight_presets")
+def api_weight_presets():
+    """Return available weight presets for client-side re-scoring."""
+    return jsonify(WEIGHT_PRESETS)
 
 
 # ── CF Analysis (EDINET DB) ──

@@ -262,6 +262,9 @@ function renderDashboard(data) {
   // ADL chart
   loadBreadthChart(activeTab);
 
+  // Sprint 4: show weight preset bar
+  document.getElementById('weightPresetBar')?.classList.remove('hidden');
+
   // Sub-tabs and tables — always show; hide tab buttons when no data
   document.getElementById('subTabs').classList.remove('hidden');
   const hasContrarian = data.value_gap_ranking && data.value_gap_ranking.length > 0;
@@ -1626,6 +1629,294 @@ function _cfChartOpts(textColor, gridColor, unit) {
       y: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
     },
   };
+}
+
+// ── Sprint 4: Weight Preset Re-scoring ───────────────────────────────────────
+
+let activePreset = 'balanced';
+let weightPresets = null;  // loaded once from /api/weight_presets
+
+async function loadWeightPresets() {
+  if (weightPresets) return weightPresets;
+  try {
+    const resp = await fetch('/api/weight_presets');
+    if (resp.ok) weightPresets = await resp.json();
+  } catch (e) { /* ignore */ }
+  return weightPresets;
+}
+
+async function applyWeightPreset(presetKey) {
+  activePreset = presetKey;
+  // Update button active state
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    const isActive = btn.dataset.preset === presetKey;
+    btn.classList.toggle('active-preset', isActive);
+    btn.classList.toggle('bg-primary-50', isActive);
+    btn.classList.toggle('dark:bg-primary-950/30', isActive);
+    btn.classList.toggle('text-primary-600', isActive);
+    btn.classList.toggle('dark:text-primary-400', isActive);
+    btn.classList.toggle('border-primary-300', isActive);
+    btn.classList.toggle('dark:border-primary-700', isActive);
+  });
+  const presets = await loadWeightPresets();
+  if (!presets || !screeningData || !screeningData.momentum_ranking) return;
+
+  const preset = presets[presetKey];
+  if (!preset) return;
+  const weights = preset.weights;
+
+  // Build original rank map
+  const origRank = {};
+  screeningData.momentum_ranking.forEach(r => { origRank[r.ticker] = r.rank; });
+
+  // Re-score each stock using stored percentile values
+  const rescored = screeningData.momentum_ranking
+    .filter(r => r.score_components && r.score_components.length > 0)
+    .map(r => {
+      const newScore = r.score_components.reduce((sum, c) => {
+        const w = weights[c.component_name] ?? 0;
+        return sum + (c.percentile_value / 100) * w * 100;
+      }, 0);
+      return { ...r, _preset_score: Math.round(newScore * 10) / 10 };
+    });
+
+  if (rescored.length === 0) {
+    // No score_components available → fall back to original ranking
+    renderTable(screeningData.momentum_ranking);
+    renderPresetBadge(preset.label, null);
+    return;
+  }
+
+  // Sort by new score
+  rescored.sort((a, b) => b._preset_score - a._preset_score);
+
+  // Inject rank_delta before rendering
+  rescored.forEach((r, i) => {
+    r._new_rank = i + 1;
+    r._rank_delta = origRank[r.ticker] - (i + 1);  // positive = rose
+  });
+
+  renderTableWithPreset(rescored, preset.label);
+}
+
+function renderTableWithPreset(ranking, presetLabel) {
+  let filtered = ranking;
+  if (showWatchlistOnly) {
+    filtered = ranking.filter(r => watchlistTickers.has(r.ticker));
+  }
+  const tbody = document.getElementById('tableBody');
+  const retClass = (v) => v > 0 ? 'text-emerald-600 dark:text-emerald-400' : v < 0 ? 'text-rose-400 dark:text-rose-300' : '';
+
+  tbody.innerHTML = filtered.map(r => {
+    const t = r.technicals;
+    const rsiClass = t.rsi > 70 ? 'text-rose-400 font-semibold' : t.rsi < 30 ? 'text-emerald-500 font-semibold' : '';
+    const starred = watchlistTickers.has(r.ticker);
+    const delta = r._rank_delta ?? 0;
+    const deltaHtml = delta === 0
+      ? '<span class="text-slate-300 dark:text-gray-600 text-[10px]">—</span>'
+      : delta > 0
+        ? `<span class="text-emerald-500 text-[10px] font-bold">▲${delta}</span>`
+        : `<span class="text-rose-400 text-[10px] font-bold">▼${Math.abs(delta)}</span>`;
+
+    return `<tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors" onclick='showDetail(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
+      <td class="px-2 py-3 text-center">
+        <button onclick="toggleStar('${r.ticker}', event)" class="text-lg leading-none cursor-pointer hover:scale-110 transition-transform ${starred ? 'text-amber-400' : 'text-slate-300 dark:text-gray-600'}">
+          ${starred ? '&#9733;' : '&#9734;'}
+        </button>
+      </td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-slate-400 text-xs sm:text-sm whitespace-nowrap">${r._new_rank}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 font-semibold text-primary-600 dark:text-primary-400 text-xs sm:text-sm whitespace-nowrap">${r.ticker}</td>
+      <td class="px-4 py-3 text-slate-500 dark:text-gray-400 hidden lg:table-cell text-xs max-w-[180px] truncate">${r.name}</td>
+      <td class="px-4 py-3 text-xs text-slate-600 dark:text-gray-400 whitespace-nowrap hidden md:table-cell">${r.sector}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell">${formatPrice(r.price)}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-bold text-xs sm:text-sm whitespace-nowrap">
+        ${r._preset_score != null ? r._preset_score.toFixed(1) : r.momentum_score}
+        <div class="text-[9px] leading-none mt-0.5">${deltaHtml}</div>
+      </td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap ${retClass(t.ret_1m)}">${t.ret_1m > 0 ? '+' : ''}${t.ret_1m}%</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell ${retClass(t.ret_3m)}">${t.ret_3m > 0 ? '+' : ''}${t.ret_3m}%</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell ${rsiClass}">${t.rsi}</td>
+    </tr>`;
+  }).join('');
+
+  renderPresetBadge(presetLabel, ranking.length);
+}
+
+function renderPresetBadge(label, count) {
+  const el = document.getElementById('presetBadge');
+  if (!el) return;
+  if (activePreset === 'balanced') {
+    el.classList.add('hidden');
+    return;
+  }
+  el.classList.remove('hidden');
+  el.textContent = `ウェイト: ${label}${count != null ? ` (${count}銘柄)` : ''}`;
+}
+
+
+// ── Sprint 4: Session History Modal ──────────────────────────────────────────
+
+async function showHistoryModal() {
+  document.getElementById('historyModal').classList.remove('hidden');
+  document.getElementById('historyModal').classList.add('flex');
+  document.getElementById('historyList').innerHTML =
+    '<div class="text-center text-slate-400 py-8 text-sm">読み込み中...</div>';
+
+  try {
+    const resp = await fetch('/api/history');
+    if (!resp.ok) throw new Error('fetch failed');
+    const sessions = await resp.json();
+    renderHistoryList(sessions);
+  } catch (e) {
+    document.getElementById('historyList').innerHTML =
+      '<div class="text-center text-rose-400 py-8 text-sm">読み込み失敗</div>';
+  }
+}
+
+function closeHistoryModal() {
+  document.getElementById('historyModal').classList.add('hidden');
+  document.getElementById('historyModal').classList.remove('flex');
+}
+
+function renderHistoryList(sessions) {
+  const el = document.getElementById('historyList');
+  if (!sessions || sessions.length === 0) {
+    el.innerHTML = '<div class="text-center text-slate-400 py-8 text-sm">履歴なし</div>';
+    return;
+  }
+  const indexLabel = { sp500: 'S&P 500', nasdaq100: 'NASDAQ 100', nikkei225: '日経225', growth250: 'グロース250' };
+  el.innerHTML = sessions.map(s => {
+    const idxLabel = indexLabel[s.index_name] || s.index_name;
+    const regime = s.regime_label ? `<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 font-medium">${s.regime_label}</span>` : '';
+    const tickers = s.top_tickers && s.top_tickers.length > 0
+      ? s.top_tickers.join(' · ')
+      : '-';
+    return `<div class="flex items-start justify-between gap-3 py-3 border-b border-slate-100 dark:border-gray-800 last:border-0">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 flex-wrap mb-1">
+          <span class="text-xs font-semibold text-slate-700 dark:text-gray-300">${idxLabel}</span>
+          <span class="text-[10px] text-slate-400 dark:text-gray-500">${s.generated_at}</span>
+          ${regime}
+        </div>
+        <div class="text-[11px] text-slate-500 dark:text-gray-400">上位: ${tickers}</div>
+        <div class="text-[10px] text-slate-400 dark:text-gray-500 mt-0.5">${s.total_screened}銘柄スクリーニング</div>
+      </div>
+      <div class="shrink-0">
+        <button onclick="showBacktestPanel(${s.id}, '${s.index_name}', '${s.generated_at}')"
+          class="text-[11px] px-2.5 py-1.5 rounded-lg bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/50 font-medium transition-colors cursor-pointer whitespace-nowrap">
+          バックテスト
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+
+// ── Sprint 4: Backtest Panel ──────────────────────────────────────────────────
+
+let _backtestSessionId = null;
+let _backtestIndexName = null;
+let _backtestDate = null;
+
+function showBacktestPanel(sessionId, indexName, sessionDate) {
+  _backtestSessionId = sessionId;
+  _backtestIndexName = indexName;
+  _backtestDate = sessionDate;
+
+  document.getElementById('backtestSessionInfo').textContent =
+    `セッション #${sessionId} — ${sessionDate}`;
+  document.getElementById('backtestResult').innerHTML = '';
+  document.getElementById('backtestPanel').classList.remove('hidden');
+}
+
+async function runBacktest() {
+  const horizon = parseInt(document.getElementById('backtestHorizon').value);
+  const topN    = parseInt(document.getElementById('backtestTopN').value);
+  const btn     = document.getElementById('backtestRunBtn');
+
+  btn.disabled = true;
+  btn.textContent = '実行中...';
+  document.getElementById('backtestResult').innerHTML =
+    '<div class="text-center text-slate-400 py-6 text-sm">データ取得中（10〜30秒かかることがあります）...</div>';
+
+  try {
+    const resp = await fetch('/api/backtest/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: _backtestSessionId,
+        horizon_days: horizon,
+        top_n: topN,
+      }),
+    });
+    const data = await resp.json();
+    renderBacktestResult(data);
+  } catch (e) {
+    document.getElementById('backtestResult').innerHTML =
+      `<div class="text-center text-rose-400 py-6 text-sm">エラー: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '実行';
+  }
+}
+
+function renderBacktestResult(bt) {
+  const el = document.getElementById('backtestResult');
+  if (bt.error) {
+    el.innerHTML = `<div class="text-rose-400 text-sm py-4 text-center">${bt.error}</div>`;
+    return;
+  }
+  const s = bt.stats;
+  const retCls = (v) => v == null ? '' : v >= 0 ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-rose-400 dark:text-rose-300 font-semibold';
+  const fmtR   = (v) => v == null ? '-' : (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+
+  el.innerHTML = `
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+      <div class="bg-slate-50 dark:bg-gray-800 rounded-xl p-3 text-center">
+        <div class="text-[10px] text-slate-400 mb-1">平均リターン</div>
+        <div class="text-lg font-bold ${retCls(s.avg_return)}">${fmtR(s.avg_return)}</div>
+      </div>
+      <div class="bg-slate-50 dark:bg-gray-800 rounded-xl p-3 text-center">
+        <div class="text-[10px] text-slate-400 mb-1">中央値リターン</div>
+        <div class="text-lg font-bold ${retCls(s.median_return)}">${fmtR(s.median_return)}</div>
+      </div>
+      <div class="bg-slate-50 dark:bg-gray-800 rounded-xl p-3 text-center">
+        <div class="text-[10px] text-slate-400 mb-1">勝率</div>
+        <div class="text-lg font-bold text-primary-600 dark:text-primary-400">${s.win_rate != null ? s.win_rate.toFixed(1) + '%' : '-'}</div>
+      </div>
+      <div class="bg-slate-50 dark:bg-gray-800 rounded-xl p-3 text-center">
+        <div class="text-[10px] text-slate-400 mb-1">超過リターン</div>
+        <div class="text-lg font-bold ${retCls(s.excess_return)}">${fmtR(s.excess_return)}</div>
+      </div>
+    </div>
+    <div class="text-[10px] text-slate-400 dark:text-gray-500 mb-3">
+      ベンチマーク: ${bt.benchmark_ticker} ${fmtR(s.benchmark_return)} / ${bt.horizon_days}営業日後 / ${s.sample_size}銘柄
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="border-b border-slate-200 dark:border-gray-700 text-slate-500">
+            <th class="px-2 py-2 text-left">#</th>
+            <th class="px-2 py-2 text-left">銘柄</th>
+            <th class="px-2 py-2 text-right">エントリー価格</th>
+            <th class="px-2 py-2 text-right">エグジット価格</th>
+            <th class="px-2 py-2 text-right">リターン</th>
+            <th class="px-2 py-2 text-right">vs ベンチ</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${bt.detail.map(d => `
+            <tr class="border-b border-slate-100 dark:border-gray-800">
+              <td class="px-2 py-2 text-slate-400">${d.rank}</td>
+              <td class="px-2 py-2 font-semibold text-primary-600 dark:text-primary-400">${d.ticker}</td>
+              <td class="px-2 py-2 text-right font-mono">${d.entry_price != null ? d.entry_price.toFixed(2) : '-'}</td>
+              <td class="px-2 py-2 text-right font-mono">${d.exit_price != null ? d.exit_price.toFixed(2) : '-'}</td>
+              <td class="px-2 py-2 text-right font-mono ${retCls(d.return_pct)}">${fmtR(d.return_pct)}</td>
+              <td class="px-2 py-2 text-right font-mono ${retCls(d.vs_benchmark)}">${fmtR(d.vs_benchmark)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 init();

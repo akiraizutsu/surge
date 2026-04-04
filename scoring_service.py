@@ -5,6 +5,49 @@ These are the exact same values used in compute_momentum_score(), just exposed
 for display purposes (no re-computation).
 """
 
+# ── Weight Presets (Sprint 4) ─────────────────────────────────────────────────
+# Each preset maps component_name → weight (must sum to 1.0).
+# Used by the frontend to re-score existing percentile values.
+
+WEIGHT_PRESETS = {
+    "balanced": {
+        "label": "バランス型（現行）",
+        "weights": {
+            "ret_1m": 0.20, "ret_3m": 0.20, "vol_ratio": 0.15,
+            "ma50_dev": 0.15, "macd_hist": 0.15, "rsi": 0.15,
+        },
+    },
+    "volume": {
+        "label": "出来高重視型",
+        "weights": {
+            "ret_1m": 0.15, "ret_3m": 0.10, "vol_ratio": 0.35,
+            "ma50_dev": 0.10, "macd_hist": 0.20, "rsi": 0.10,
+        },
+    },
+    "trend": {
+        "label": "継続トレンド重視型",
+        "weights": {
+            "ret_1m": 0.10, "ret_3m": 0.30, "vol_ratio": 0.10,
+            "ma50_dev": 0.30, "macd_hist": 0.10, "rsi": 0.10,
+        },
+    },
+    "breakout": {
+        "label": "初動特化型",
+        "weights": {
+            "ret_1m": 0.35, "ret_3m": 0.10, "vol_ratio": 0.30,
+            "ma50_dev": 0.05, "macd_hist": 0.10, "rsi": 0.10,
+        },
+    },
+    "reversal": {
+        "label": "リバーサル重視型",
+        "weights": {
+            "ret_1m": 0.05, "ret_3m": 0.05, "vol_ratio": 0.20,
+            "ma50_dev": 0.10, "macd_hist": 0.15, "rsi": 0.45,
+        },
+    },
+}
+
+
 # Component metadata: key = DataFrame column name, weight = momentum weight
 SCORE_COMPONENTS = [
     {"key": "score_ret_1m",  "component_name": "ret_1m",    "label": "1Mリターン",   "weight": 0.20},
