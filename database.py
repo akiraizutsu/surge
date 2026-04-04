@@ -367,6 +367,8 @@ def get_latest_sessions_by_index():
             "value_gap_ranking": vg_ranking,
             "sector_rotation": [],
             "breakout_ranking": [],
+            "time_arb_ranking": [],
+            "smallcap_ranking": [],
             "sector_distribution": sector_dist,
             "summary": {
                 "avg_score": avg_score,

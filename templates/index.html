@@ -226,6 +226,14 @@
         class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
         ブレイクアウト
       </button>
+      <button id="subTabTimeArb" onclick="switchSubTab('time_arb')"
+        class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
+        タイム裁定
+      </button>
+      <button id="subTabSmallcap" onclick="switchSubTab('smallcap')"
+        class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
+        小型優良株
+      </button>
     </div>
 
     <!-- Table -->
@@ -335,6 +343,59 @@
             </tr>
           </thead>
           <tbody id="breakoutTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Time Arbitrage Table -->
+    <div id="timeArbTableArea" class="hidden">
+      <div class="mb-3 px-1 text-xs text-slate-400 dark:text-gray-500">
+        設備投資CF急増（≥+20%）× 一過性赤字（純利益≥−15%）× 営業CFプラス の条件を満たす売り込まれた銘柄。機関投資家が短期業績悪化で手放したが、将来の種まきをしている可能性がある候補です。
+      </div>
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50">
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">#</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">銘柄</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider hidden lg:table-cell">名称</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden md:table-cell">セクター</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">株価</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">裁定スコア</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">設備投資成長</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">純利益変化</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">営業CF</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">1M</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">RSI</th>
+            </tr>
+          </thead>
+          <tbody id="timeArbTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Small-cap Momentum Table -->
+    <div id="smallcapTableArea" class="hidden">
+      <div class="mb-3 px-1 text-xs text-slate-400 dark:text-gray-500">
+        機関投資家が流動性の問題で参入できない小型・中型株の中でモメンタムが上昇している銘柄。スクリーニング対象のうちファンダメンタルズデータを取得できた銘柄が対象です。
+      </div>
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50">
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">#</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">銘柄</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider hidden lg:table-cell">名称</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden md:table-cell">セクター</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">株価</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">時価総額</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">スコア</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap">1M</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">3M</th>
+              <th scope="col" class="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-slate-500 tracking-wider whitespace-nowrap hidden sm:table-cell">RSI</th>
+            </tr>
+          </thead>
+          <tbody id="smallcapTableBody"></tbody>
         </table>
       </div>
     </div>

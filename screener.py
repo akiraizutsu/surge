@@ -863,6 +863,192 @@ def compute_value_gap(all_results, fundamentals_list, is_japan=False):
     return result
 
 
+# ── Time Arbitrage ─────────────────────────────────────────────────────────────
+
+def compute_time_arbitrage(results, name_map=None, is_japan=False, progress_cb=None):
+    """Time arbitrage: one-time bad earnings + CapEx surge + price recovery potential.
+
+    Pre-filter: ret_1m < -5% (sold off), ret_3m > -60% (not collapsed), RSI 25-65.
+    Fetch cashflow + financials for up to 40 candidates in parallel.
+    Score: CapEx growth (45%) + NI drop magnitude (35%) + RSI recovery (20%).
+    """
+    if name_map is None:
+        name_map = {}
+
+    candidates = [
+        r for r in results
+        if (r.get("ret_1m", 0) or 0) < -5
+        and (r.get("ret_3m", 0) or 0) > -60
+        and 25 < (r.get("rsi", 50) or 50) < 65
+    ]
+    candidates.sort(key=lambda r: r.get("ret_1m", 0) or 0)
+    candidates = candidates[:40]
+
+    if not candidates:
+        return []
+
+    divisor = 1e8 if is_japan else 1e9  # 億円 or $B
+
+    def find_series(df, *keywords):
+        for key in keywords:
+            for idx in df.index:
+                if key.lower() in str(idx).lower():
+                    s = df.loc[idx].dropna()
+                    if len(s) >= 2:
+                        return s
+        return pd.Series(dtype=float)
+
+    def fetch_one(r):
+        ticker = r["ticker"]
+        try:
+            t = yf.Ticker(ticker)
+            cf = t.cashflow
+            fin = t.financials
+
+            if cf is None or cf.empty or fin is None or fin.empty:
+                return None
+
+            capex_s = find_series(cf, "capital expenditure")
+            opcf_s = find_series(cf, "operating cash flow")
+            ni_s = find_series(fin, "net income")
+            rev_s = find_series(fin, "total revenue", "revenue")
+
+            if len(capex_s) < 2 or len(ni_s) < 2:
+                return None
+
+            capex_latest = abs(float(capex_s.iloc[0]))
+            capex_prior = abs(float(capex_s.iloc[1]))
+            if capex_prior <= 0:
+                return None
+
+            capex_growth = (capex_latest / capex_prior - 1) * 100
+            opcf_raw = float(opcf_s.iloc[0]) if not opcf_s.empty else 0
+            ni_latest = float(ni_s.iloc[0])
+            ni_prior = float(ni_s.iloc[1])
+            if ni_prior == 0:
+                return None
+
+            ni_change = (ni_latest / abs(ni_prior) - 1) * 100
+
+            rev_stable = True
+            if len(rev_s) >= 2:
+                rv, rp = float(rev_s.iloc[0]), float(rev_s.iloc[1])
+                if rp != 0:
+                    rev_stable = (rv / abs(rp) - 1) * 100 > -20
+
+            # Criteria: CapEx surged ≥20%, NI dropped ≥15%, operating CF > 0, revenue stable
+            if capex_growth < 20 or ni_change > -15 or opcf_raw <= 0 or not rev_stable:
+                return None
+
+            return {
+                "ticker": ticker,
+                "sector": r["sector"],
+                "price": r["price"],
+                "ret_1m": r["ret_1m"],
+                "ret_3m": r["ret_3m"],
+                "rsi": round(float(r["rsi"]), 1),
+                "capex_growth": round(capex_growth, 1),
+                "ni_change": round(ni_change, 1),
+                "opcf_val": round(opcf_raw / divisor, 1),
+            }
+        except Exception:
+            return None
+
+    raw = []
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futs = {ex.submit(fetch_one, r): r for r in candidates}
+        for fut in as_completed(futs):
+            res = fut.result()
+            if res:
+                raw.append(res)
+
+    if not raw:
+        return []
+
+    if len(raw) < 2:
+        raw[0]["rank"] = 1
+        raw[0]["name"] = name_map.get(raw[0]["ticker"], raw[0]["ticker"])
+        raw[0]["arb_score"] = 50.0
+        return raw
+
+    sdf = pd.DataFrame(raw)
+    sdf["s_capex"] = sdf["capex_growth"].rank(pct=True)
+    sdf["s_ni_drop"] = (-sdf["ni_change"]).rank(pct=True)
+    sdf["s_rsi"] = 1 - (sdf["rsi"] - 47).abs().rank(pct=True)
+    sdf["arb_score"] = (
+        sdf["s_capex"] * 0.45 + sdf["s_ni_drop"] * 0.35 + sdf["s_rsi"] * 0.20
+    ) * 100
+    sdf = sdf.sort_values("arb_score", ascending=False)
+
+    result = []
+    for rank_idx, (_, row) in enumerate(sdf.iterrows(), 1):
+        result.append({
+            "rank": rank_idx,
+            "ticker": row["ticker"],
+            "name": name_map.get(row["ticker"], row["ticker"]),
+            "sector": row["sector"],
+            "price": row["price"],
+            "ret_1m": row["ret_1m"],
+            "ret_3m": row["ret_3m"],
+            "rsi": row["rsi"],
+            "capex_growth": row["capex_growth"],
+            "ni_change": row["ni_change"],
+            "opcf_val": row["opcf_val"],
+            "arb_score": round(float(row["arb_score"]), 1),
+        })
+    return result[:15]
+
+
+# ── Small-cap Momentum ─────────────────────────────────────────────────────────
+
+def compute_smallcap_momentum(results, all_fundamentals, score_df, is_japan=False):
+    """Small/mid-cap stocks with rising momentum.
+
+    Uses market_cap_b from all_fundamentals (top_n + declining pool).
+    Filter: Japan 100億-3000億円, US $0.5B-$15B; momentum_score ≥ 45.
+    """
+    fund_map = {f["ticker"]: f for f in all_fundamentals if f.get("market_cap_b")}
+
+    score_map = {
+        row["ticker"]: round(float(row["momentum_score"]) * 100, 1)
+        for _, row in score_df.iterrows()
+    }
+
+    # cap_min / cap_max in units of market_cap_b (B in local currency)
+    # Japan: 1B JPY = 10億円  →  100億円 = 10 B JPY, 3000億円 = 300 B JPY
+    # US:    1B USD            →  $0.5B = 0.5, $15B = 15
+    cap_min, cap_max = (10, 300) if is_japan else (0.5, 15)
+
+    candidates = []
+    for r in results:
+        fund = fund_map.get(r["ticker"])
+        if not fund:
+            continue
+        cap = fund.get("market_cap_b", 0) or 0
+        if not (cap_min <= cap <= cap_max):
+            continue
+        score = score_map.get(r["ticker"], 0)
+        if score < 45:
+            continue
+        candidates.append({
+            "ticker": r["ticker"],
+            "name": fund.get("short_name", r["ticker"]),
+            "sector": r["sector"],
+            "price": r["price"],
+            "market_cap_b": cap,          # raw; frontend formats per market
+            "ret_1m": r["ret_1m"],
+            "ret_3m": r["ret_3m"],
+            "rsi": r["rsi"],
+            "momentum_score": score,
+            "dividend_yield": fund.get("dividend_yield", 0),
+        })
+
+    candidates.sort(key=lambda x: x["momentum_score"], reverse=True)
+    for i, c in enumerate(candidates[:15], 1):
+        c["rank"] = i
+    return candidates[:15]
+
+
 def run_screening(index="sp500", top_n=20, progress_cb=None):
     """Run full screening pipeline. Returns dict with results."""
     if progress_cb:
@@ -1010,6 +1196,22 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
     all_fund_for_gap = fundamentals + declining_fund
     value_gap_ranking = compute_value_gap(results, all_fund_for_gap, is_japan=is_japan)
 
+    # Time arbitrage — build name map first
+    name_map = {}
+    if is_japan:
+        name_map = {r["ticker"]: jp_names.get(r["ticker"], r["ticker"]) for r in results}
+    for f in fundamentals + declining_fund:
+        t = f.get("ticker")
+        if t and not name_map.get(t):
+            name_map[t] = f.get("short_name", t)
+
+    if progress_cb:
+        progress_cb("タイム裁定候補を計算中...", 93)
+    time_arb_ranking = compute_time_arbitrage(results, name_map=name_map, is_japan=is_japan)
+
+    # Small-cap momentum
+    smallcap_ranking = compute_smallcap_momentum(results, fundamentals + declining_fund, df, is_japan=is_japan)
+
     # Compute squeeze scores
     sq_df = compute_squeeze_score(
         [{"short_pct_of_float": r["short_interest"]["short_pct_of_float"],
@@ -1093,6 +1295,8 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
         "value_gap_ranking": value_gap_ranking[:20],
         "sector_rotation": sector_rotation,
         "breakout_ranking": breakout_ranking,
+        "time_arb_ranking": time_arb_ranking,
+        "smallcap_ranking": smallcap_ranking,
         "breadth": breadth_data,
         "latest_breadth": latest_breadth,
     }

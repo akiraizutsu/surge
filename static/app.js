@@ -219,13 +219,21 @@ function renderDashboard(data) {
   // ADL chart
   loadBreadthChart(activeTab);
 
-  // Sub-tabs and tables — always show; hide contrarian tab button if no data
+  // Sub-tabs and tables — always show; hide tab buttons when no data
   document.getElementById('subTabs').classList.remove('hidden');
   const hasContrarian = data.value_gap_ranking && data.value_gap_ranking.length > 0;
+  const hasTimeArb   = data.time_arb_ranking  && data.time_arb_ranking.length > 0;
+  const hasSmallcap  = data.smallcap_ranking   && data.smallcap_ranking.length > 0;
   const contrarianBtn = document.getElementById('subTabContrarian');
+  const timeArbBtn    = document.getElementById('subTabTimeArb');
+  const smallcapBtn   = document.getElementById('subTabSmallcap');
   if (contrarianBtn) contrarianBtn.style.display = hasContrarian ? '' : 'none';
-  // If currently on contrarian but no data, fall back to momentum
+  if (timeArbBtn)    timeArbBtn.style.display    = hasTimeArb   ? '' : 'none';
+  if (smallcapBtn)   smallcapBtn.style.display   = hasSmallcap  ? '' : 'none';
+  // Fall back to momentum if active tab has no data
   if (!hasContrarian && activeSubTab === 'contrarian') activeSubTab = 'momentum';
+  if (!hasTimeArb   && activeSubTab === 'time_arb')   activeSubTab = 'momentum';
+  if (!hasSmallcap  && activeSubTab === 'smallcap')   activeSubTab = 'momentum';
   switchSubTab(activeSubTab);
 }
 
@@ -356,11 +364,16 @@ function renderCharts(data) {
 function switchSubTab(tab) {
   activeSubTab = tab;
   document.querySelectorAll('#subTabs .index-tab').forEach(btn => btn.classList.remove('active'));
-  const tabBtnMap = { momentum: 'subTabMomentum', contrarian: 'subTabContrarian', rotation: 'subTabRotation', breakout: 'subTabBreakout' };
+  const tabBtnMap = {
+    momentum: 'subTabMomentum', contrarian: 'subTabContrarian',
+    rotation: 'subTabRotation', breakout: 'subTabBreakout',
+    time_arb: 'subTabTimeArb', smallcap: 'subTabSmallcap',
+  };
   document.getElementById(tabBtnMap[tab])?.classList.add('active');
 
   // Hide all sub-tab areas
-  ['tableArea', 'contrarianTableArea', 'sectorRotationArea', 'breakoutTableArea'].forEach(id => {
+  ['tableArea', 'contrarianTableArea', 'sectorRotationArea', 'breakoutTableArea',
+   'timeArbTableArea', 'smallcapTableArea'].forEach(id => {
     document.getElementById(id)?.classList.add('hidden');
   });
 
@@ -379,6 +392,12 @@ function switchSubTab(tab) {
   } else if (tab === 'breakout') {
     document.getElementById('breakoutTableArea').classList.remove('hidden');
     if (screeningData && screeningData.breakout_ranking) renderBreakoutTable(screeningData.breakout_ranking);
+  } else if (tab === 'time_arb') {
+    document.getElementById('timeArbTableArea').classList.remove('hidden');
+    if (screeningData && screeningData.time_arb_ranking) renderTimeArbTable(screeningData.time_arb_ranking);
+  } else if (tab === 'smallcap') {
+    document.getElementById('smallcapTableArea').classList.remove('hidden');
+    if (screeningData && screeningData.smallcap_ranking) renderSmallcapTable(screeningData.smallcap_ranking);
   }
 }
 
@@ -750,6 +769,69 @@ function renderBreakoutTable(ranking) {
       <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap"><div class="flex items-center gap-1">${statusBadges || '-'}</div></td>
       <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-bold text-sm whitespace-nowrap">${r.momentum_score}</td>
       <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-sm whitespace-nowrap hidden sm:table-cell">${r.rsi}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Time Arbitrage Table ──
+function renderTimeArbTable(ranking) {
+  const tbody = document.getElementById('timeArbTableBody');
+  const retClass = (v) => v > 0 ? 'text-emerald-600 dark:text-emerald-400' : v < 0 ? 'text-rose-400 dark:text-rose-300' : '';
+  const fmtPct = (v) => v != null ? (v > 0 ? '+' : '') + v + '%' : '-';
+  const isJP = isJapanIndex();
+  const cfUnit = isJP ? '億円' : '$B';
+
+  if (!ranking || ranking.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-sm text-slate-400 dark:text-gray-500">データなし（売り込まれた銘柄が見つからないか、CF基準を満たす銘柄がありませんでした）</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = ranking.map(r => {
+    return `<tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-slate-400 text-xs sm:text-sm whitespace-nowrap">${r.rank}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 font-semibold text-primary-600 dark:text-primary-400 text-xs sm:text-sm whitespace-nowrap">${r.ticker}</td>
+      <td class="px-4 py-3 text-slate-500 dark:text-gray-400 hidden lg:table-cell text-xs max-w-[160px] truncate">${r.name}</td>
+      <td class="px-4 py-3 text-xs text-slate-600 dark:text-gray-400 whitespace-nowrap hidden md:table-cell">${r.sector}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap">${formatPrice(r.price)}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-bold text-xs sm:text-sm whitespace-nowrap text-amber-500 dark:text-amber-400">${r.arb_score}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap text-emerald-600 dark:text-emerald-400">+${r.capex_growth}%</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap ${retClass(r.ni_change)}">${fmtPct(r.ni_change)}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell">${r.opcf_val}<span class="text-[10px] text-slate-400 ml-0.5">${cfUnit}</span></td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap ${retClass(r.ret_1m)}">${fmtPct(r.ret_1m)}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell">${r.rsi}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Small-cap Momentum Table ──
+function renderSmallcapTable(ranking) {
+  const tbody = document.getElementById('smallcapTableBody');
+  const retClass = (v) => v > 0 ? 'text-emerald-600 dark:text-emerald-400' : v < 0 ? 'text-rose-400 dark:text-rose-300' : '';
+  const fmtPct = (v) => v != null ? (v > 0 ? '+' : '') + v + '%' : '-';
+  const isJP = isJapanIndex();
+
+  const fmtCap = (cap) => {
+    if (isJP) return (cap * 10).toFixed(0) + '億円';
+    return '$' + cap.toFixed(1) + 'B';
+  };
+
+  if (!ranking || ranking.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-sm text-slate-400 dark:text-gray-500">データなし（取得した銘柄プール内に該当する小型・中型株がありませんでした）</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = ranking.map(r => {
+    return `<tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-slate-400 text-xs sm:text-sm whitespace-nowrap">${r.rank}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 font-semibold text-primary-600 dark:text-primary-400 text-xs sm:text-sm whitespace-nowrap">${r.ticker}</td>
+      <td class="px-4 py-3 text-slate-500 dark:text-gray-400 hidden lg:table-cell text-xs max-w-[160px] truncate">${r.name}</td>
+      <td class="px-4 py-3 text-xs text-slate-600 dark:text-gray-400 whitespace-nowrap hidden md:table-cell">${r.sector}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap">${formatPrice(r.price)}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell">${fmtCap(r.market_cap_b)}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-bold text-xs sm:text-sm whitespace-nowrap">${r.momentum_score}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap ${retClass(r.ret_1m)}">${fmtPct(r.ret_1m)}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell ${retClass(r.ret_3m)}">${fmtPct(r.ret_3m)}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell">${r.rsi}</td>
     </tr>`;
   }).join('');
 }
