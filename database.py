@@ -138,6 +138,33 @@ def init_db():
                 latest_financials_json TEXT,
                 fin_fetched_at TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS score_components (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                result_id INTEGER NOT NULL REFERENCES screening_results(id) ON DELETE CASCADE,
+                component_name TEXT NOT NULL,
+                label TEXT,
+                raw_value REAL,
+                percentile_value REAL,
+                weighted_score REAL
+            );
+
+            CREATE TABLE IF NOT EXISTS stock_tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                result_id INTEGER NOT NULL REFERENCES screening_results(id) ON DELETE CASCADE,
+                ticker TEXT NOT NULL,
+                tag_name TEXT NOT NULL,
+                confidence REAL,
+                reason_text TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS stock_questions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                result_id INTEGER NOT NULL REFERENCES screening_results(id) ON DELETE CASCADE,
+                ticker TEXT NOT NULL,
+                question_text TEXT NOT NULL,
+                sort_order INTEGER DEFAULT 0
+            );
         """)
 
         # ── Schema migrations: add columns to existing tables ──────────────
@@ -181,7 +208,7 @@ def save_results(session_id, ranking):
             t = r.get("technicals", {})
             f = r.get("fundamentals", {})
             si = r.get("short_interest", {})
-            conn.execute(
+            cur = conn.execute(
                 """INSERT INTO screening_results (
                     session_id, rank, ticker, name, sector, price, momentum_score,
                     ret_1d, ret_1w, ret_1m, ret_3m, vol_ratio, ma50_dev, ma200_dev,
@@ -215,7 +242,76 @@ def save_results(session_id, ranking):
                     f.get("earnings_date"), f.get("days_to_earnings"),
                 ),
             )
+            result_id = cur.lastrowid
+            ticker = r.get("ticker", "")
+
+            # ── score_components ──────────────────────────────────────────────
+            for comp in r.get("score_components", []):
+                conn.execute(
+                    """INSERT INTO score_components
+                       (result_id, component_name, label, raw_value, percentile_value, weighted_score)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (result_id, comp.get("component_name"), comp.get("label"),
+                     comp.get("raw_value"), comp.get("percentile_value"), comp.get("weighted_score")),
+                )
+
+            # ── stock_tags ────────────────────────────────────────────────────
+            for tag in r.get("tags", []):
+                conn.execute(
+                    """INSERT INTO stock_tags
+                       (result_id, ticker, tag_name, confidence, reason_text)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (result_id, ticker, tag.get("tag_name"),
+                     tag.get("confidence"), tag.get("reason_text")),
+                )
+
+            # ── stock_questions ───────────────────────────────────────────────
+            for i, q in enumerate(r.get("questions", [])):
+                conn.execute(
+                    """INSERT INTO stock_questions
+                       (result_id, ticker, question_text, sort_order)
+                       VALUES (?, ?, ?, ?)""",
+                    (result_id, ticker, q, i),
+                )
     conn.close()
+
+
+def get_stock_explain(ticker):
+    """Return score_components, tags, questions for the latest DB result of a ticker."""
+    conn = _connect()
+    row = conn.execute(
+        "SELECT id FROM screening_results WHERE ticker = ? ORDER BY id DESC LIMIT 1",
+        (ticker,),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return None
+    result_id = row["id"]
+
+    components = conn.execute(
+        "SELECT component_name, label, raw_value, percentile_value, weighted_score "
+        "FROM score_components WHERE result_id = ? ORDER BY id",
+        (result_id,),
+    ).fetchall()
+
+    tags = conn.execute(
+        "SELECT tag_name, confidence, reason_text "
+        "FROM stock_tags WHERE result_id = ? AND ticker = ?",
+        (result_id, ticker),
+    ).fetchall()
+
+    questions = conn.execute(
+        "SELECT question_text FROM stock_questions "
+        "WHERE result_id = ? AND ticker = ? ORDER BY sort_order",
+        (result_id, ticker),
+    ).fetchall()
+
+    conn.close()
+    return {
+        "score_components": [dict(c) for c in components],
+        "tags": [dict(t) for t in tags],
+        "questions": [q["question_text"] for q in questions],
+    }
 
 
 def get_sessions(limit=10):

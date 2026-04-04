@@ -29,6 +29,7 @@ from database import (
     save_cf_cache, get_cf_cache, clear_cf_cache,
     get_edinet_cached_companies, save_edinet_companies,
     get_edinet_cached_financials, save_edinet_financials,
+    get_stock_explain,
 )
 
 app = Flask(__name__)
@@ -304,6 +305,41 @@ def get_all_results():
         return jsonify(db_results)
 
     return jsonify({"error": "No results available"}), 404
+
+
+@app.get("/api/stock/<ticker>/explain")
+def stock_explain(ticker):
+    """Return score breakdown, selection reason tags, and confirmation questions.
+
+    First checks in-memory results (fast, fresh screening), falls back to DB
+    (persists across restarts). Returns 404 if ticker has never been screened.
+    """
+    ticker = ticker.upper()
+
+    # ── Try in-memory first ──────────────────────────────────────────────────
+    with _lock:
+        all_results = dict(_state["results"])
+
+    for idx_data in all_results.values():
+        ranking = idx_data.get("momentum_ranking", [])
+        for stock in ranking:
+            if stock.get("ticker") == ticker:
+                return jsonify({
+                    "ticker": ticker,
+                    "score_components": stock.get("score_components", []),
+                    "tags": stock.get("tags", []),
+                    "questions": stock.get("questions", []),
+                    "source": "memory",
+                })
+
+    # ── Fall back to DB ──────────────────────────────────────────────────────
+    explain = get_stock_explain(ticker)
+    if explain:
+        explain["ticker"] = ticker
+        explain["source"] = "db"
+        return jsonify(explain)
+
+    return jsonify({"error": f"{ticker} not found in recent screening results"}), 404
 
 
 # ── Watchlist ──
