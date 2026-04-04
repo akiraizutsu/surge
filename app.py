@@ -136,11 +136,13 @@ def _run_single_index(index, top_n):
         _state["result"] = result
         _state["results"][index] = result
 
+    regime_json = json.dumps(result["regime"], ensure_ascii=False) if result.get("regime") else None
     session_id = save_session({
         "index_name": index,
         "top_n": top_n,
         "total_screened": result["total_screened"],
         "generated_at": result["generated_at"],
+        "regime_json": regime_json,
     })
     save_results(session_id, result["momentum_ranking"])
     if result.get("value_gap_ranking"):
@@ -163,11 +165,13 @@ def _run_all_indices(top_n):
             # Keep the latest as the single result for backward compat
             _state["result"] = result
 
+        regime_json = json.dumps(result["regime"], ensure_ascii=False) if result.get("regime") else None
         session_id = save_session({
             "index_name": idx,
             "top_n": top_n,
             "total_screened": result["total_screened"],
             "generated_at": result["generated_at"],
+            "regime_json": regime_json,
         })
         save_results(session_id, result["momentum_ranking"])
         if result.get("value_gap_ranking"):
@@ -191,11 +195,13 @@ def _run_japan_indices(top_n):
             _state["results"][idx] = result
             _state["result"] = result
 
+        regime_json = json.dumps(result["regime"], ensure_ascii=False) if result.get("regime") else None
         session_id = save_session({
             "index_name": idx,
             "top_n": top_n,
             "total_screened": result["total_screened"],
             "generated_at": result["generated_at"],
+            "regime_json": regime_json,
         })
         save_results(session_id, result["momentum_ranking"])
         if result.get("value_gap_ranking"):
@@ -217,11 +223,13 @@ def _run_us_indices(top_n):
             _state["results"][idx] = result
             _state["result"] = result
 
+        regime_json = json.dumps(result["regime"], ensure_ascii=False) if result.get("regime") else None
         session_id = save_session({
             "index_name": idx,
             "top_n": top_n,
             "total_screened": result["total_screened"],
             "generated_at": result["generated_at"],
+            "regime_json": regime_json,
         })
         save_results(session_id, result["momentum_ranking"])
         if result.get("value_gap_ranking"):

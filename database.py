@@ -176,6 +176,8 @@ def init_db():
         _add_column_if_missing(conn, "screening_results", "days_to_earnings", "INTEGER")
         _add_column_if_missing(conn, "edinet_company_cache", "latest_financials_json", "TEXT")
         _add_column_if_missing(conn, "edinet_company_cache", "fin_fetched_at", "TEXT")
+        # Sprint 2: market regime stored per session
+        _add_column_if_missing(conn, "screening_sessions", "regime_json", "TEXT")
 
     conn.close()
 
@@ -193,8 +195,11 @@ def save_session(meta):
     conn = _connect()
     with conn:
         cur = conn.execute(
-            "INSERT INTO screening_sessions (index_name, top_n, total_screened, generated_at) VALUES (?, ?, ?, ?)",
-            (meta["index_name"], meta["top_n"], meta["total_screened"], meta["generated_at"]),
+            """INSERT INTO screening_sessions
+               (index_name, top_n, total_screened, generated_at, regime_json)
+               VALUES (?, ?, ?, ?, ?)""",
+            (meta["index_name"], meta["top_n"], meta["total_screened"],
+             meta["generated_at"], meta.get("regime_json")),
         )
         session_id = cur.lastrowid
     conn.close()
@@ -454,6 +459,16 @@ def get_latest_sessions_by_index():
         ).fetchall()
         vg_ranking = [dict(r) for r in vg_rows] if vg_rows else []
 
+        # Sprint 2: load market regime from session
+        regime = None
+        try:
+            raw_regime = session["regime_json"] if "regime_json" in session.keys() else None
+            if raw_regime:
+                import json as _json
+                regime = _json.loads(raw_regime)
+        except Exception:
+            pass
+
         index_label = {"sp500": "S&P 500", "nasdaq100": "NASDAQ 100", "nikkei225": "日経225", "growth250": "グロース250"}.get(idx, idx)
         results[idx] = {
             "index": index_label,
@@ -472,6 +487,7 @@ def get_latest_sessions_by_index():
                 "golden_cross_count": golden_count,
             },
             "latest_breadth": latest_breadth,
+            "regime": regime,
         }
     conn.close()
     return results
