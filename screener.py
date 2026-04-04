@@ -14,6 +14,7 @@ import yfinance as yf
 import scoring_service
 import tagging_service
 import questions_service
+import regime_service
 
 warnings.filterwarnings("ignore")
 
@@ -1339,6 +1340,15 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
     # Latest breadth snapshot for summary card
     latest_breadth = breadth_data[-1] if breadth_data else {"advances": 0, "declines": 0, "breadth_pct": 0}
 
+    # ── Sprint 2: Market Regime Classification ────────────────────────────────
+    momentum_scores_list = [r["momentum_score"] for r in ranking if r.get("momentum_score") is not None]
+    regime = regime_service.classify(
+        breadth_pct=latest_breadth.get("breadth_pct", 0),
+        adl_data=breadth_data,
+        momentum_scores=momentum_scores_list,
+        sector_rotation=sector_rotation,
+    )
+
     return {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "index": {"sp500": "S&P 500", "nasdaq100": "NASDAQ 100", "nikkei225": "日経225", "growth250": "グロース250"}.get(index, index.upper()),
@@ -1360,4 +1370,5 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
         "smallcap_ranking": smallcap_ranking,
         "breadth": breadth_data,
         "latest_breadth": latest_breadth,
+        "regime": regime,
     }

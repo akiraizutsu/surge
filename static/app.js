@@ -194,6 +194,42 @@ function pollProgress() {
   }, 1000);
 }
 
+// ── Market Regime Card ──
+function renderRegimeCard(regime) {
+  const el = document.getElementById('regimeCard');
+  if (!el) return;
+  if (!regime) { el.classList.add('hidden'); return; }
+
+  const confPct = Math.round((regime.confidence || 0) * 100);
+  const signals = (regime.signals || []).map(s =>
+    `<li class="flex items-start gap-1.5"><span class="text-slate-400 dark:text-gray-500 mt-0.5">•</span><span>${s}</span></li>`
+  ).join('');
+
+  el.innerHTML = `
+    <div class="card mt-4 border-l-4" style="border-left-color:${regime.color}">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl leading-none">${regime.dot}</span>
+          <div>
+            <div class="text-xs text-slate-500 dark:text-gray-400 font-medium uppercase tracking-wide">相場地合い</div>
+            <div class="text-lg font-bold text-slate-800 dark:text-white">${regime.regime_label}</div>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="text-xs text-slate-500 dark:text-gray-400">信頼度</div>
+          <div class="text-2xl font-bold" style="color:${regime.color}">${confPct}%</div>
+        </div>
+      </div>
+      <p class="mt-2 text-sm text-slate-600 dark:text-gray-300">${regime.description || ''}</p>
+      <div class="mt-2 rounded-lg px-3 py-2 text-sm font-medium" style="background:${regime.color}1a;color:${regime.color}">
+        ${regime.implication || ''}
+      </div>
+      ${signals ? `<ul class="mt-3 space-y-1 text-xs text-slate-500 dark:text-gray-400">${signals}</ul>` : ''}
+    </div>
+  `;
+  el.classList.remove('hidden');
+}
+
 // ── Render Dashboard ──
 function renderDashboard(data) {
   // Summary cards
@@ -212,6 +248,9 @@ function renderDashboard(data) {
     document.getElementById('cardBreadth').textContent = (pct > 0 ? '+' : '') + pct + '%';
     document.getElementById('cardBreadthDetail').textContent = `${lb.advances}↑ / ${lb.declines}↓`;
   }
+
+  // Regime card
+  renderRegimeCard(data.regime || null);
 
   // Charts
   document.getElementById('chartsArea').classList.remove('hidden');
