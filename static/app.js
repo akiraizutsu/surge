@@ -1528,6 +1528,14 @@ function toggleWatchlistView() {
 }
 
 // ── Init ──
+function hidePageLoader() {
+  const el = document.getElementById('pageLoader');
+  if (!el) return;
+  el.style.transition = 'opacity 0.3s ease';
+  el.style.opacity = '0';
+  setTimeout(() => el.remove(), 320);
+}
+
 async function init() {
   // Set default active tab based on page
   activeTab = window.IS_JAPAN_PAGE ? 'nikkei225' : 'sp500';
@@ -1566,6 +1574,7 @@ async function init() {
             const firstKey = preferred.find(k => allResults[k]) || keys[0];
             switchTab(firstKey);
           }
+          hidePageLoader();
           return; // Data loaded, don't show empty state
         }
       }
@@ -1574,10 +1583,12 @@ async function init() {
       document.getElementById('btnRun').disabled = true;
       document.getElementById('btnRun').textContent = '分析中...';
       document.getElementById('progressArea').classList.remove('hidden');
+      hidePageLoader();
       pollProgress();
       return;
     }
     // No results and not running — show empty state
+    hidePageLoader();
     document.getElementById('emptyState').classList.remove('hidden');
   });
 }
