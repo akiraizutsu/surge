@@ -18,6 +18,7 @@ import regime_service
 import quality_service
 import seed_score_service
 import capital_allocation_service
+import database
 
 warnings.filterwarnings("ignore")
 
@@ -1141,6 +1142,197 @@ def compute_smallcap_momentum(results, all_fundamentals, score_df, is_japan=Fals
     return candidates[:15]
 
 
+def compute_changes(current_ranking: list, prev_ranking: list, index_name: str, watchlist: list) -> dict:
+    """Compare current vs previous ranking to detect notable changes.
+
+    Returns:
+        {
+          "new_entries":     [{ticker, name, rank, score}],   # 圏外→ランクイン
+          "dropped":         [{ticker, name, prev_rank, score_delta}],  # ランクアウト
+          "score_surges":    [{ticker, name, rank, score_delta}],  # スコア急上昇(+8以上)
+          "score_drops":     [{ticker, name, rank, score_delta}],  # スコア急落(-8以下)
+          "streak_leaders":  [{ticker, name, rank, sessions_in_top}],  # 連続上位
+          "watchlist_changes": [{ticker, event_type, detail}],  # WL銘柄の変化
+          "events":          [{ticker, index_name, event_type, payload_json}],  # DB保存用
+        }
+    """
+    import json as _json
+
+    prev_map = {r["ticker"]: r for r in prev_ranking}
+    curr_map = {r["ticker"]: r for r in current_ranking}
+    curr_tickers = {r["ticker"] for r in current_ranking}
+    prev_tickers = {r["ticker"] for r in prev_ranking}
+    wl_set = set(watchlist)
+
+    new_entries, dropped, score_surges, score_drops = [], [], [], []
+    watchlist_changes, events = [], []
+
+    # New entries (in current but not in previous)
+    for r in current_ranking:
+        t = r["ticker"]
+        if t not in prev_tickers:
+            entry = {"ticker": t, "name": r.get("name", t), "rank": r.get("rank"), "score": r.get("momentum_score")}
+            new_entries.append(entry)
+            payload = _json.dumps(entry, ensure_ascii=False)
+            events.append({"ticker": t, "index_name": index_name, "event_type": "new_entry", "payload_json": payload})
+            if t in wl_set:
+                watchlist_changes.append({"ticker": t, "event_type": "新規ランクイン", "detail": f"#{r.get('rank')} スコア{r.get('momentum_score')}"})
+
+    # Dropped (in previous but not in current)
+    for r in prev_ranking:
+        t = r["ticker"]
+        if t not in curr_tickers:
+            entry = {"ticker": t, "name": r.get("name", t), "prev_rank": r.get("rank"), "prev_score": r.get("momentum_score")}
+            dropped.append(entry)
+            if t in wl_set:
+                events.append({"ticker": t, "index_name": index_name, "event_type": "dropped", "payload_json": _json.dumps(entry, ensure_ascii=False)})
+                watchlist_changes.append({"ticker": t, "event_type": "ランクアウト", "detail": f"前回 #{r.get('rank')}"})
+
+    # Score changes for tickers in both
+    for r in current_ranking:
+        t = r["ticker"]
+        if t not in prev_map:
+            continue
+        curr_score = r.get("momentum_score") or 0
+        prev_score = prev_map[t].get("momentum_score") or 0
+        delta = round(curr_score - prev_score, 1)
+        entry = {"ticker": t, "name": r.get("name", t), "rank": r.get("rank"), "score": curr_score, "score_delta": delta}
+        if delta >= 8:
+            score_surges.append(entry)
+            events.append({"ticker": t, "index_name": index_name, "event_type": "score_surge", "payload_json": _json.dumps(entry, ensure_ascii=False)})
+            if t in wl_set:
+                watchlist_changes.append({"ticker": t, "event_type": "スコア急上昇", "detail": f"+{delta}pt → {curr_score}"})
+        elif delta <= -8:
+            score_drops.append(entry)
+            if t in wl_set:
+                events.append({"ticker": t, "index_name": index_name, "event_type": "score_drop", "payload_json": _json.dumps(entry, ensure_ascii=False)})
+                watchlist_changes.append({"ticker": t, "event_type": "スコア急落", "detail": f"{delta}pt → {curr_score}"})
+
+    # Earnings approaching (WL tickers within 7 days)
+    for r in current_ranking:
+        t = r["ticker"]
+        if t not in wl_set:
+            continue
+        dte = r.get("fundamentals", {}).get("days_to_earnings") if isinstance(r.get("fundamentals"), dict) else r.get("days_to_earnings")
+        if dte is not None and 0 <= dte <= 7:
+            ed = r.get("fundamentals", {}).get("earnings_date") if isinstance(r.get("fundamentals"), dict) else r.get("earnings_date")
+            entry = {"ticker": t, "index_name": index_name, "days_to_earnings": dte, "earnings_date": ed}
+            events.append({"ticker": t, "index_name": index_name, "event_type": "earnings_soon", "payload_json": _json.dumps(entry, ensure_ascii=False)})
+            watchlist_changes.append({"ticker": t, "event_type": "決算接近", "detail": f"あと{dte}日 ({ed})"})
+
+    # 52W high approaching (WL tickers within 2%)
+    for r in current_ranking:
+        t = r["ticker"]
+        if t not in wl_set:
+            continue
+        tech = r.get("technicals", {}) if isinstance(r.get("technicals"), dict) else {}
+        dist = tech.get("dist_from_high") if tech else r.get("dist_from_high")
+        if dist is not None and -2 <= dist <= 0:
+            entry = {"ticker": t, "dist_from_high": dist}
+            events.append({"ticker": t, "index_name": index_name, "event_type": "near_52w_high", "payload_json": _json.dumps(entry, ensure_ascii=False)})
+            watchlist_changes.append({"ticker": t, "event_type": "52W高値接近", "detail": f"高値まで{dist}%"})
+
+    return {
+        "new_entries": new_entries[:10],
+        "dropped": dropped[:10],
+        "score_surges": score_surges[:5],
+        "score_drops": score_drops[:5],
+        "watchlist_changes": watchlist_changes,
+        "events": events,
+    }
+
+
+def generate_daily_report(ranking: list, regime: dict, breadth: dict, sector_rotation: list, changes: dict, is_japan: bool = False) -> dict:
+    """Generate rule-based daily report text.
+
+    Returns:
+        {
+          "regime_text": str,
+          "highlights": [str, ...],
+          "watchlist_alerts": [str, ...],
+          "initial_candidates": [{ticker, name, reason}],   # 初動候補
+          "streak_candidates": [{ticker, name, reason}],    # 継続強者
+          "caution_candidates": [{ticker, name, reason}],   # 過熱注意
+        }
+    """
+    # ── Regime text ─────────────────────────────────────────────────────────
+    regime_label = (regime or {}).get("label", "不明")
+    regime_text = f"現在の地合い: {regime_label}"
+
+    # ── Breadth highlights ───────────────────────────────────────────────────
+    highlights = []
+    if breadth:
+        adv = breadth.get("advances", 0)
+        dec = breadth.get("declines", 0)
+        bpct = breadth.get("breadth_pct", 0) or 0
+        total = adv + dec
+        if total > 0:
+            if bpct >= 60:
+                highlights.append(f"騰落比率 +{round(bpct,1)}% — 広い上昇が継続中")
+            elif bpct <= 40:
+                highlights.append(f"騰落比率 {round(bpct,1)}% — 広範な売りに注意")
+
+    # ── Sector highlights ────────────────────────────────────────────────────
+    if sector_rotation:
+        accelerating = [s for s in sector_rotation if s.get("trend") == "加速"]
+        decelerating = [s for s in sector_rotation if s.get("trend") == "減速"]
+        if accelerating:
+            snames = "・".join(s["sector"] for s in accelerating[:3])
+            highlights.append(f"資金流入加速セクター: {snames}")
+        if decelerating:
+            snames = "・".join(s["sector"] for s in decelerating[:2])
+            highlights.append(f"資金流出減速セクター: {snames}")
+
+    # ── Change highlights ────────────────────────────────────────────────────
+    if changes.get("new_entries"):
+        ne = changes["new_entries"][:3]
+        tickers = " / ".join(f"{e['ticker']}" for e in ne)
+        highlights.append(f"新規ランクイン: {tickers}")
+
+    # ── Candidate classification ─────────────────────────────────────────────
+    initial_candidates = []   # 初動: 高値更新初動型 or BB圧縮後ブレイク
+    streak_candidates  = []   # 継続強者: スコア高 + RS高 + 連続
+    caution_candidates = []   # 過熱注意: overheat + RSI高
+
+    for r in ranking[:30]:
+        t = r.get("technicals", {}) or {}
+        score = r.get("momentum_score", 0) or 0
+        tags = [tag.get("tag_name", "") for tag in (r.get("tags") or [])]
+        rsi = t.get("rsi") or 50
+        overheat = t.get("overheat", False)
+        rs_label = t.get("rs_label", "")
+        dist = t.get("dist_from_high")
+        bb_sq = t.get("bb_squeeze", False)
+
+        # 初動候補: BB圧縮 or 高値更新初動タグ or 52W近い
+        if bb_sq or "高値更新初動型" in tags or (dist is not None and -3 <= dist <= 0):
+            reason = "BB圧縮ブレイク" if bb_sq else ("高値更新初動" if "高値更新初動型" in tags else "52W高値圏")
+            initial_candidates.append({"ticker": r["ticker"], "name": r.get("name", r["ticker"]), "score": score, "reason": reason})
+
+        # 継続強者: スコア85以上 + RS prime/short_term + 過熱でない
+        if score >= 85 and rs_label in ("prime", "short_term") and not overheat:
+            streak_candidates.append({"ticker": r["ticker"], "name": r.get("name", r["ticker"]), "score": score, "reason": "高スコア+高RS継続"})
+
+        # 過熱注意: overheat or RSI > 75
+        if overheat or rsi > 75:
+            reason = f"RSI{round(rsi,1)}" if rsi > 75 else "過熱シグナル"
+            caution_candidates.append({"ticker": r["ticker"], "name": r.get("name", r["ticker"]), "score": score, "reason": reason})
+
+    # ── Watchlist alerts ─────────────────────────────────────────────────────
+    watchlist_alerts = []
+    for chg in changes.get("watchlist_changes", []):
+        watchlist_alerts.append(f"{chg['ticker']}: {chg['event_type']} — {chg['detail']}")
+
+    return {
+        "regime_text": regime_text,
+        "highlights": highlights[:5],
+        "watchlist_alerts": watchlist_alerts[:10],
+        "initial_candidates": initial_candidates[:3],
+        "streak_candidates": streak_candidates[:3],
+        "caution_candidates": caution_candidates[:3],
+    }
+
+
 def run_screening(index="sp500", top_n=20, progress_cb=None):
     """Run full screening pipeline. Returns dict with results."""
     if progress_cb:
@@ -1449,6 +1641,29 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
         sector_rotation=sector_rotation,
     )
 
+    # ── Sprint 6: Change Detection & Daily Report ────────────────────────────
+    try:
+        prev_ranking = database.get_prev_ranking(index, limit=top_n + 10)
+        watchlist = database.get_watchlist()
+        changes = compute_changes(ranking, prev_ranking, index, watchlist)
+        # Persist watchlist-related events to DB
+        if changes.get("events"):
+            database.save_watchlist_events(changes["events"])
+    except Exception:
+        changes = {"new_entries": [], "dropped": [], "score_surges": [], "score_drops": [], "watchlist_changes": [], "events": []}
+
+    try:
+        daily_report = generate_daily_report(
+            ranking=ranking,
+            regime=regime,
+            breadth=latest_breadth,
+            sector_rotation=sector_rotation,
+            changes=changes,
+            is_japan=is_japan,
+        )
+    except Exception:
+        daily_report = {}
+
     return {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "index": {"sp500": "S&P 500", "nasdaq100": "NASDAQ 100", "nikkei225": "日経225", "growth250": "グロース250"}.get(index, index.upper()),
@@ -1477,4 +1692,7 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
             key=lambda x: x.get("seed_score", 0),
             reverse=True
         )[:20],
+        # Sprint 6: change detection + daily report
+        "changes": changes,
+        "daily_report": daily_report,
     }
