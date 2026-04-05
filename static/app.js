@@ -844,7 +844,7 @@ function renderTable(ranking) {
       <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm text-slate-900 dark:text-gray-100 whitespace-nowrap hidden sm:table-cell">${formatPrice(r.price)}</td>
       <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-bold text-xs sm:text-sm whitespace-nowrap">${r.momentum_score}</td>
       <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap"><div class="flex items-center gap-0.5 sm:gap-1">${status || '<span class="text-slate-300 dark:text-gray-600">-</span>'}</div></td>
-      <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell ${sqClass}">${sqScore != null ? sqScore.toFixed(1) : '-'}</td>
+      ${!isJapanIndex() ? `<td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden sm:table-cell ${sqClass}">${sqScore != null ? sqScore.toFixed(1) : '-'}</td>` : ''}
       <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden lg:table-cell ${retClass(t.ret_1d)}">${t.ret_1d > 0 ? '+' : ''}${t.ret_1d}%</td>
       <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap hidden lg:table-cell ${retClass(t.ret_1w)}">${t.ret_1w > 0 ? '+' : ''}${t.ret_1w}%</td>
       <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm whitespace-nowrap ${retClass(t.ret_1m)}">${t.ret_1m > 0 ? '+' : ''}${t.ret_1m}%</td>
@@ -1405,6 +1405,7 @@ async function showDetail(stock) {
       `).join('')}
     </div>
 
+    ${!isJapanIndex() ? `
     <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">ショートスクイーズ分析</h3>
     <div class="grid grid-cols-2 gap-4 mb-6">
       <div class="bg-rose-50 dark:bg-rose-950/20 rounded-xl p-4">
@@ -1424,7 +1425,7 @@ async function showDetail(stock) {
           </div>
         `).join('')}
       </div>
-    </div>
+    </div>` : ''}
 
     <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">ファンダメンタルズ</h3>
     <div class="grid grid-cols-3 gap-3">
