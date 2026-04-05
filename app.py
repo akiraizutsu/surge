@@ -36,6 +36,8 @@ from database import (
 import backtest_service
 from scoring_service import WEIGHT_PRESETS
 import capital_allocation_service
+import us_advanced_service
+import data_quality_service
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "surge-dev-fallback-key-change-in-prod")
@@ -499,6 +501,36 @@ def api_seed_score(ticker):
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ── Sprint 7: US Advanced Signals ────────────────────────────────────────────
+
+@app.get("/api/stock/<ticker>/us_advanced")
+def api_us_advanced(ticker):
+    """Return US advanced signals for a ticker (EPS revision, institutional flow, earnings drift, options)."""
+    ticker = ticker.upper()
+    try:
+        info = yf.Ticker(ticker).info
+        # Build merged dict with all needed fields
+        merged = dict(info)
+        merged["ret_1m"]             = None  # not available from live info alone
+        merged["ret_1w"]             = None
+        merged["days_to_earnings"]   = None
+        merged["short_pct_of_float"] = info.get("shortPercentOfFloat")
+        merged["short_change_pct"]   = None
+        result = us_advanced_service.compute_us_advanced(merged)
+        result["ticker"] = ticker
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Data Quality ─────────────────────────────────────────────────────────────
+
+@app.get("/api/data_quality/status")
+def api_data_quality_status():
+    """Return data source health summary."""
+    return jsonify(data_quality_service.get_status_summary())
 
 
 # ── Sprint 6: Watchlist Events / Change Detection ────────────────────────────

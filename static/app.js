@@ -276,30 +276,34 @@ function renderDashboard(data) {
   const hasSmallcap   = data.smallcap_ranking  && data.smallcap_ranking.length > 0;
   const hasRotation   = data.sector_rotation   && data.sector_rotation.length > 0;
   const hasBreakout   = data.breakout_ranking  && data.breakout_ranking.length > 0;
-  const hasQuality    = data.momentum_ranking  && data.momentum_ranking.some(r => r.quality_score != null);
-  const hasSeed       = data.seed_ranking      && data.seed_ranking.length > 0;
-  const contrarianBtn = document.getElementById('subTabContrarian');
-  const timeArbBtn    = document.getElementById('subTabTimeArb');
-  const smallcapBtn   = document.getElementById('subTabSmallcap');
-  const rotationBtn   = document.getElementById('subTabRotation');
-  const breakoutBtn   = document.getElementById('subTabBreakout');
-  const qualityBtn    = document.getElementById('subTabQuality');
-  const seedBtn       = document.getElementById('subTabSeed');
-  if (contrarianBtn) contrarianBtn.style.display = hasContrarian ? '' : 'none';
-  if (timeArbBtn)    timeArbBtn.style.display    = hasTimeArb   ? '' : 'none';
-  if (smallcapBtn)   smallcapBtn.style.display   = hasSmallcap  ? '' : 'none';
-  if (rotationBtn)   rotationBtn.style.display   = hasRotation  ? '' : 'none';
-  if (breakoutBtn)   breakoutBtn.style.display   = hasBreakout  ? '' : 'none';
-  if (qualityBtn)    qualityBtn.style.display    = hasQuality   ? '' : 'none';
-  if (seedBtn)       seedBtn.style.display       = hasSeed      ? '' : 'none';
+  const hasQuality      = data.momentum_ranking    && data.momentum_ranking.some(r => r.quality_score != null);
+  const hasSeed         = data.seed_ranking        && data.seed_ranking.length > 0;
+  const hasUsAdvanced   = data.us_advanced_ranking && data.us_advanced_ranking.length > 0;
+  const contrarianBtn   = document.getElementById('subTabContrarian');
+  const timeArbBtn      = document.getElementById('subTabTimeArb');
+  const smallcapBtn     = document.getElementById('subTabSmallcap');
+  const rotationBtn     = document.getElementById('subTabRotation');
+  const breakoutBtn     = document.getElementById('subTabBreakout');
+  const qualityBtn      = document.getElementById('subTabQuality');
+  const seedBtn         = document.getElementById('subTabSeed');
+  const usAdvancedBtn   = document.getElementById('subTabUsAdvanced');
+  if (contrarianBtn)  contrarianBtn.style.display  = hasContrarian  ? '' : 'none';
+  if (timeArbBtn)     timeArbBtn.style.display     = hasTimeArb     ? '' : 'none';
+  if (smallcapBtn)    smallcapBtn.style.display    = hasSmallcap    ? '' : 'none';
+  if (rotationBtn)    rotationBtn.style.display    = hasRotation    ? '' : 'none';
+  if (breakoutBtn)    breakoutBtn.style.display    = hasBreakout    ? '' : 'none';
+  if (qualityBtn)     qualityBtn.style.display     = hasQuality     ? '' : 'none';
+  if (seedBtn)        seedBtn.style.display        = hasSeed        ? '' : 'none';
+  if (usAdvancedBtn)  usAdvancedBtn.style.display  = hasUsAdvanced  ? '' : 'none';
   // Fall back to momentum if active tab has no data
-  if (!hasContrarian && activeSubTab === 'contrarian') activeSubTab = 'momentum';
-  if (!hasTimeArb    && activeSubTab === 'time_arb')   activeSubTab = 'momentum';
-  if (!hasSmallcap   && activeSubTab === 'smallcap')   activeSubTab = 'momentum';
-  if (!hasRotation   && activeSubTab === 'rotation')   activeSubTab = 'momentum';
-  if (!hasBreakout   && activeSubTab === 'breakout')   activeSubTab = 'momentum';
-  if (!hasQuality    && activeSubTab === 'quality')    activeSubTab = 'momentum';
-  if (!hasSeed       && activeSubTab === 'seed')       activeSubTab = 'momentum';
+  if (!hasContrarian  && activeSubTab === 'contrarian')   activeSubTab = 'momentum';
+  if (!hasTimeArb     && activeSubTab === 'time_arb')     activeSubTab = 'momentum';
+  if (!hasSmallcap    && activeSubTab === 'smallcap')     activeSubTab = 'momentum';
+  if (!hasRotation    && activeSubTab === 'rotation')     activeSubTab = 'momentum';
+  if (!hasBreakout    && activeSubTab === 'breakout')     activeSubTab = 'momentum';
+  if (!hasQuality     && activeSubTab === 'quality')      activeSubTab = 'momentum';
+  if (!hasSeed        && activeSubTab === 'seed')         activeSubTab = 'momentum';
+  if (!hasUsAdvanced  && activeSubTab === 'us_advanced')  activeSubTab = 'momentum';
   switchSubTab(activeSubTab);
 }
 
@@ -435,12 +439,14 @@ function switchSubTab(tab) {
     rotation: 'subTabRotation', breakout: 'subTabBreakout',
     time_arb: 'subTabTimeArb', smallcap: 'subTabSmallcap',
     quality: 'subTabQuality', seed: 'subTabSeed',
+    us_advanced: 'subTabUsAdvanced',
   };
   document.getElementById(tabBtnMap[tab])?.classList.add('active');
 
   // Hide all sub-tab areas
   ['tableArea', 'contrarianTableArea', 'sectorRotationArea', 'breakoutTableArea',
-   'timeArbTableArea', 'smallcapTableArea', 'qualityMatrixArea', 'seedTableArea'].forEach(id => {
+   'timeArbTableArea', 'smallcapTableArea', 'qualityMatrixArea', 'seedTableArea',
+   'usAdvancedTableArea'].forEach(id => {
     document.getElementById(id)?.classList.add('hidden');
   });
 
@@ -468,9 +474,13 @@ function switchSubTab(tab) {
   } else if (tab === 'quality') {
     document.getElementById('qualityMatrixArea').classList.remove('hidden');
     if (screeningData && screeningData.momentum_ranking) renderQualityMatrix(screeningData.momentum_ranking);
+    refreshDataQuality();
   } else if (tab === 'seed') {
     document.getElementById('seedTableArea').classList.remove('hidden');
     if (screeningData && screeningData.seed_ranking) renderSeedTable(screeningData.seed_ranking);
+  } else if (tab === 'us_advanced') {
+    document.getElementById('usAdvancedTableArea')?.classList.remove('hidden');
+    if (screeningData && screeningData.us_advanced_ranking) renderUsAdvancedTable(screeningData.us_advanced_ranking);
   }
 }
 
@@ -613,6 +623,41 @@ function renderSeedTable(ranking) {
         <div class="flex flex-wrap gap-1">${tags}</div>
       </td>
       <td class="px-3 py-2 text-xs text-slate-500 dark:text-gray-400 hidden xl:table-cell max-w-[180px] truncate">${r.seed_note || '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Sprint 7: US Advanced Table ──
+function renderUsAdvancedTable(ranking) {
+  const tbody = document.getElementById('usAdvancedTableBody');
+  if (!tbody) return;
+
+  const dirColor = (d) => {
+    if (!d) return 'text-slate-400';
+    if (d.includes('上方') || d.includes('買い') || d.includes('ポジティブ') || d.includes('コール')) return 'text-emerald-600 dark:text-emerald-400';
+    if (d.includes('下方') || d.includes('売り') || d.includes('ネガティブ') || d.includes('プット')) return 'text-rose-400 dark:text-rose-300';
+    return 'text-slate-500 dark:text-gray-400';
+  };
+
+  tbody.innerHTML = ranking.map((r, idx) => {
+    const adv = r.us_advanced || {};
+    const eps = adv.eps_revision || {};
+    const inst = adv.institutional_flow || {};
+    const drift = adv.earnings_drift || {};
+    const score = r.us_advanced_score;
+    const tags = (r.us_advanced_tags || []).map(t =>
+      `<span class="inline-block px-1.5 py-0.5 text-[9px] rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 font-medium whitespace-nowrap">${t}</span>`
+    ).join('');
+    const scoreColor = score >= 70 ? 'text-emerald-600 dark:text-emerald-400' : score >= 55 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-gray-400';
+    return `<tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors" onclick='showDetail(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
+      <td class="px-3 py-2 text-slate-400 text-xs">${idx + 1}</td>
+      <td class="px-3 py-2 font-semibold text-primary-600 dark:text-primary-400 text-xs">${r.ticker}</td>
+      <td class="px-3 py-2 text-slate-500 dark:text-gray-400 text-xs hidden md:table-cell max-w-[150px] truncate">${r.name}</td>
+      <td class="px-3 py-2 text-right font-bold text-lg ${scoreColor}">${score != null ? score.toFixed(1) : '-'}</td>
+      <td class="px-3 py-2 text-xs hidden sm:table-cell ${dirColor(eps.direction)}">${eps.direction || '-'}</td>
+      <td class="px-3 py-2 text-xs hidden sm:table-cell ${dirColor(inst.direction)}">${inst.direction || '-'}${inst.ownership_pct ? ` <span class="text-slate-400">${inst.ownership_pct}%</span>` : ''}</td>
+      <td class="px-3 py-2 text-xs hidden lg:table-cell ${dirColor(drift.direction)}">${drift.direction || '-'}</td>
+      <td class="px-3 py-2 text-xs hidden lg:table-cell"><div class="flex flex-wrap gap-1">${tags || '<span class="text-slate-300">-</span>'}</div></td>
     </tr>`;
   }).join('');
 }
@@ -2188,6 +2233,41 @@ async function markAllNotificationsRead() {
     if (badge) badge.classList.add('hidden');
     await showNotificationDrawer();
   } catch (_) {}
+}
+
+// ── Data Quality ─────────────────────────────────────────────────────────────
+
+const HEALTH_COLORS = {
+  ok:      'text-emerald-500',
+  degraded:'text-amber-400',
+  error:   'text-rose-400',
+  unknown: 'text-slate-400 dark:text-gray-500',
+};
+
+async function refreshDataQuality() {
+  const el = document.getElementById('dataQualityStatus');
+  if (!el) return;
+  try {
+    const res = await fetch('/api/data_quality/status');
+    const sources = await res.json();
+    if (!sources.length) {
+      el.innerHTML = '<span class="text-slate-400">データなし（スクリーニング後に更新されます）</span>';
+      return;
+    }
+    const rows = sources.map(s => {
+      const color = HEALTH_COLORS[s.health_status] || HEALTH_COLORS.unknown;
+      const age = s.age_hours != null ? `${s.age_hours}h前` : '−';
+      const staleWarn = s.stale ? ' <span class="text-amber-400">⚠ 古い</span>' : '';
+      return `<div class="flex items-center gap-3 py-1 border-b border-slate-100 dark:border-gray-800 last:border-0">
+        <span class="${color} font-medium w-16 shrink-0">${s.health_label}</span>
+        <span class="text-slate-600 dark:text-gray-300 flex-1">${s.source_name}</span>
+        <span class="text-slate-400 dark:text-gray-500 shrink-0">${age}${staleWarn}</span>
+      </div>`;
+    }).join('');
+    el.innerHTML = rows;
+  } catch (_) {
+    el.innerHTML = '<span class="text-rose-400">取得失敗</span>';
+  }
 }
 
 init();
