@@ -16,6 +16,8 @@ import tagging_service
 import questions_service
 import regime_service
 import quality_service
+import seed_score_service
+import capital_allocation_service
 
 warnings.filterwarnings("ignore")
 
@@ -886,6 +888,22 @@ def compute_value_gap(all_results, fundamentals_list, is_japan=False):
 
     result = []
     for rank_idx, (_, row) in enumerate(cdf.iterrows(), 1):
+        # ── Sprint 5: Value Gap sub-category decomposition ────────────────────
+        # Analyst Gap:     target price upside (s_gap × s_rec)
+        # Cash Value:      low PE + high dividend yield
+        # Quality Value:   earnings growth intact + revenue growth
+        # Expectation Reset: price already down + RSI low (reset happened)
+        vg_analyst  = round((float(row["s_gap"]) * 0.6 + float(row["s_rec"]) * 0.4) * 100, 1)
+        pe_s  = 1 - float(cdf.loc[cdf["ticker"] == row["ticker"], "s_pe"].iloc[0]) if len(cdf.loc[cdf["ticker"] == row["ticker"]]) > 0 else 0.5
+        div_s = float(row.get("dividend_yield", 0) or 0) / max(float(cdf["dividend_yield"].max() or 1), 0.001)
+        vg_cash     = round(_clamp_01(pe_s * 0.6 + div_s * 0.4) * 100, 1)
+        vg_quality  = round((float(row["s_eps"]) * 0.5 + float(row["s_rev"]) * 0.5) * 100, 1)
+        # Expectation reset: stock down a lot (low ret_1m pct) + RSI low
+        ret_pct_inv = 1 - (float(cdf["ret_1m"].rank(pct=True).loc[cdf["ticker"] == row["ticker"]].iloc[0]) if len(cdf.loc[cdf["ticker"] == row["ticker"]]) > 0 else 0.5)
+        rsi_val = float(row.get("rsi", 50) or 50)
+        rsi_inv = 1 - (rsi_val / 100)
+        vg_reset    = round((ret_pct_inv * 0.6 + rsi_inv * 0.4) * 100, 1)
+
         result.append({
             "rank": rank_idx,
             "ticker": row["ticker"],
@@ -909,9 +927,18 @@ def compute_value_gap(all_results, fundamentals_list, is_japan=False):
             "eps": row["eps"],
             "ma50_dev": row["ma50_dev"],
             "ma200_dev": row["ma200_dev"],
+            # Sprint 5: Value Gap decomposition
+            "vg_analyst_gap":       vg_analyst,
+            "vg_cash_value":        vg_cash,
+            "vg_quality_value":     vg_quality,
+            "vg_expectation_reset": vg_reset,
         })
 
     return result
+
+
+def _clamp_01(v: float) -> float:
+    return max(0.0, min(1.0, v))
 
 
 # ── Time Arbitrage ─────────────────────────────────────────────────────────────
@@ -1298,6 +1325,26 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
         item["entry_difficulty"] = q["entry_difficulty"]
         item["technicals"]["ma25_dev"] = r.get("ma25_dev")
 
+    # ── Sprint 5: Seed Score + Capital Allocation ─────────────────────────────
+    for item in ranking:
+        ticker = item["ticker"]
+        r = _result_map.get(ticker, {})
+        fund_raw = fund_map.get(ticker, {})
+        tech = item.get("technicals", {})
+
+        # Seed score (primarily meaningful for Japan stocks, computed for all)
+        seed_result = seed_score_service.compute_seed_score(fund_raw, tech)
+        item["seed_score"]      = seed_result["seed_score"]
+        item["seed_components"] = seed_result["seed_components"]
+        item["seed_tags"]       = seed_result["seed_tags"]
+        item["seed_note"]       = seed_result["seed_note"]
+
+        # Capital allocation score
+        cap_result = capital_allocation_service.compute_capital_allocation(fund_raw)
+        item["capital_score"]      = cap_result["capital_score"]
+        item["capital_components"] = cap_result["capital_components"]
+        item["capital_grade"]      = cap_result["capital_grade"]
+
     # ── Sprint 1: Tags & Questions ────────────────────────────────────────────
     for item in ranking:
         t = item.get("technicals", {})
@@ -1410,4 +1457,10 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
         "breadth": breadth_data,
         "latest_breadth": latest_breadth,
         "regime": regime,
+        # Sprint 5: seed ranking (top by seed_score, Japan only)
+        "seed_ranking": sorted(
+            [r for r in ranking if r.get("seed_score", 0) >= 20],
+            key=lambda x: x.get("seed_score", 0),
+            reverse=True
+        )[:20],
     }

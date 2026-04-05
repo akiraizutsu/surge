@@ -197,6 +197,10 @@ def init_db():
         # Sprint 3: quality score and entry difficulty
         _add_column_if_missing(conn, "screening_results", "quality_score", "REAL")
         _add_column_if_missing(conn, "screening_results", "entry_difficulty", "TEXT")
+        # Sprint 5: seed score and capital allocation
+        _add_column_if_missing(conn, "screening_results", "seed_score", "REAL")
+        _add_column_if_missing(conn, "screening_results", "capital_score", "REAL")
+        _add_column_if_missing(conn, "screening_results", "capital_grade", "TEXT")
 
     conn.close()
 
@@ -244,8 +248,9 @@ def save_results(session_id, ranking):
                     float_shares, short_change_pct, squeeze_score,
                     high_52w, low_52w, dist_from_high, bb_width,
                     earnings_date, days_to_earnings,
-                    quality_score, entry_difficulty
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    quality_score, entry_difficulty,
+                    seed_score, capital_score, capital_grade
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     session_id, r.get("rank"), r.get("ticker"), r.get("name"),
                     r.get("sector"), r.get("price"), r.get("momentum_score"),
@@ -266,6 +271,7 @@ def save_results(session_id, ranking):
                     t.get("high_52w"), t.get("low_52w"), t.get("dist_from_high"), t.get("bb_width"),
                     f.get("earnings_date"), f.get("days_to_earnings"),
                     r.get("quality_score"), r.get("entry_difficulty"),
+                    r.get("seed_score"), r.get("capital_score"), r.get("capital_grade"),
                 ),
             )
             result_id = cur.lastrowid
@@ -520,6 +526,10 @@ def get_latest_sessions_by_index():
                 # Sprint 3
                 "quality_score": r["quality_score"] if "quality_score" in r.keys() else None,
                 "entry_difficulty": r["entry_difficulty"] if "entry_difficulty" in r.keys() else None,
+                # Sprint 5
+                "seed_score": r["seed_score"] if "seed_score" in r.keys() else None,
+                "capital_score": r["capital_score"] if "capital_score" in r.keys() else None,
+                "capital_grade": r["capital_grade"] if "capital_grade" in r.keys() else None,
             })
 
         # Build sector distribution

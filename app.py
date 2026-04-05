@@ -34,6 +34,7 @@ from database import (
 )
 import backtest_service
 from scoring_service import WEIGHT_PRESETS
+import capital_allocation_service
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "surge-dev-fallback-key-change-in-prod")
@@ -461,6 +462,42 @@ def api_backtest_results():
 def api_weight_presets():
     """Return available weight presets for client-side re-scoring."""
     return jsonify(WEIGHT_PRESETS)
+
+
+# ── Sprint 5: Seed Score + Capital Allocation ─────────────────────────────────
+
+@app.get("/api/stock/<ticker>/capital_allocation")
+def api_capital_allocation(ticker):
+    """Return capital allocation score for a ticker (live yfinance fetch)."""
+    try:
+        info = yf.Ticker(ticker).info
+        result = capital_allocation_service.compute_capital_allocation(info)
+        result["ticker"] = ticker
+        result["component_labels"] = capital_allocation_service.COMPONENT_LABELS
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.get("/api/stock/<ticker>/seed_score")
+def api_seed_score(ticker):
+    """Return seed score for a ticker (live yfinance fetch). Japan stocks only."""
+    import seed_score_service
+    try:
+        info = yf.Ticker(ticker).info
+        # Build minimal technicals from info
+        current_price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
+        high_52w = info.get("fiftyTwoWeekHigh") or current_price
+        dist_from_high = round((current_price / high_52w - 1) * 100, 2) if high_52w > 0 else 0
+        technicals = {
+            "dist_from_high": dist_from_high,
+            "ret_1m": None,
+        }
+        result = seed_score_service.compute_seed_score(info, technicals)
+        result["ticker"] = ticker
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ── CF Analysis (EDINET DB) ──
