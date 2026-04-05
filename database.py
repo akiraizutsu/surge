@@ -182,6 +182,16 @@ def init_db():
                 created_at TEXT DEFAULT (datetime('now'))
             );
 
+            CREATE TABLE IF NOT EXISTS data_source_status (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_name TEXT NOT NULL UNIQUE,
+                last_success_at TEXT,
+                last_failure_at TEXT,
+                last_error TEXT,
+                health_status TEXT DEFAULT 'unknown',
+                metadata_json TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS watchlist_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ticker TEXT NOT NULL,

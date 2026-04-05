@@ -18,6 +18,8 @@ import regime_service
 import quality_service
 import seed_score_service
 import capital_allocation_service
+import us_advanced_service
+import data_quality_service
 import database
 
 warnings.filterwarnings("ignore")
@@ -1342,25 +1344,41 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
 
     jp_names = {}
     _edinet_key = os.environ.get("EDINETDB_API_KEY", "")
-    if index == "nasdaq100":
-        tickers, sectors = get_nasdaq100_tickers()
-    elif index == "nikkei225":
-        tickers, sectors, jp_names = get_nikkei225_tickers()
-        # Enrich sectors from EDINET (parallel, 225 API calls)
-        if _edinet_key:
-            if progress_cb:
-                progress_cb("EDINETセクター取得中...", 3)
-            edinet_sectors = get_edinet_sectors(tickers, _edinet_key, progress_cb)
-            sectors.update(edinet_sectors)  # overwrite "N/A" with real industry
-    elif index == "growth250":
-        tickers, sectors, jp_names = get_growth250_tickers()
-    else:
-        tickers, sectors = get_sp500_tickers()
+    try:
+        if index == "nasdaq100":
+            tickers, sectors = get_nasdaq100_tickers()
+        elif index == "nikkei225":
+            tickers, sectors, jp_names = get_nikkei225_tickers()
+            # Enrich sectors from EDINET (parallel, 225 API calls)
+            if _edinet_key:
+                if progress_cb:
+                    progress_cb("EDINETセクター取得中...", 3)
+                edinet_sectors = get_edinet_sectors(tickers, _edinet_key, progress_cb)
+                sectors.update(edinet_sectors)  # overwrite "N/A" with real industry
+        elif index == "growth250":
+            tickers, sectors, jp_names = get_growth250_tickers()
+        else:
+            tickers, sectors = get_sp500_tickers()
+        data_quality_service.record_success(
+            data_quality_service.SOURCE_WIKIPEDIA,
+            {"index": index, "ticker_count": len(tickers)},
+        )
+    except Exception as _wiki_err:
+        data_quality_service.record_failure(data_quality_service.SOURCE_WIKIPEDIA, str(_wiki_err))
+        raise
 
     if progress_cb:
         progress_cb(f"Found {len(tickers)} tickers", 8)
 
-    results, price_data = screen_momentum(tickers, sectors, progress_cb, is_japan=is_japan)
+    try:
+        results, price_data = screen_momentum(tickers, sectors, progress_cb, is_japan=is_japan)
+        data_quality_service.record_success(
+            data_quality_service.SOURCE_YFINANCE,
+            {"screened": len(results), "total": len(tickers), "index": index},
+        )
+    except Exception as _yf_err:
+        data_quality_service.record_failure(data_quality_service.SOURCE_YFINANCE, str(_yf_err))
+        raise
 
     # Compute market breadth (ADL) from raw price data
     breadth_data = compute_breadth(price_data, tickers)
@@ -1380,7 +1398,15 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
             progress_cb("EDINETファンダメンタルズ取得中...", 70)
         # Build price_map from screening results for P/B and dividend yield calc
         price_map = {r["ticker"]: r["price"] for r in results if "ticker" in r}
-        edinet_funds = get_edinet_fundamentals(top_tickers, _edinet_key, price_map, progress_cb)
+        try:
+            edinet_funds = get_edinet_fundamentals(top_tickers, _edinet_key, price_map, progress_cb)
+            data_quality_service.record_success(
+                data_quality_service.SOURCE_EDINET,
+                {"fetched": len(edinet_funds), "index": index},
+            )
+        except Exception as _edinet_err:
+            data_quality_service.record_failure(data_quality_service.SOURCE_EDINET, str(_edinet_err))
+            edinet_funds = {}
         for f in fundamentals:
             ef = edinet_funds.get(f["ticker"], {})
             # Fill only missing / zero values from yfinance
@@ -1551,6 +1577,24 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
         item["capital_components"] = cap_result["capital_components"]
         item["capital_grade"]      = cap_result["capital_grade"]
 
+        # Sprint 7: US Advanced signals (EPS revision, institutional flow, earnings drift, options)
+        if not is_japan:
+            # Merge technicals into fund_raw for context (days_to_earnings, ret_1m etc.)
+            merged = dict(fund_raw)
+            merged["ret_1m"] = tech.get("ret_1m")
+            merged["ret_1w"] = tech.get("ret_1w")
+            merged["days_to_earnings"] = item.get("fundamentals", {}).get("days_to_earnings")
+            merged["short_pct_of_float"] = item.get("short_interest", {}).get("short_pct_of_float")
+            merged["short_change_pct"] = item.get("short_interest", {}).get("short_change_pct")
+            us_adv = us_advanced_service.compute_us_advanced(merged)
+            item["us_advanced_score"] = us_adv["us_advanced_score"]
+            item["us_advanced_tags"]  = us_adv["us_advanced_tags"]
+            item["us_advanced"]       = us_adv
+        else:
+            item["us_advanced_score"] = None
+            item["us_advanced_tags"]  = []
+            item["us_advanced"]       = None
+
     # ── Sprint 1: Tags & Questions ────────────────────────────────────────────
     for item in ranking:
         t = item.get("technicals", {})
@@ -1695,4 +1739,13 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
         # Sprint 6: change detection + daily report
         "changes": changes,
         "daily_report": daily_report,
+        # Sprint 7: US advanced signals ranking (top by us_advanced_score)
+        "us_advanced_ranking": sorted(
+            [r for r in ranking if r.get("us_advanced_score") is not None and r.get("us_advanced_score", 0) >= 55],
+            key=lambda x: x.get("us_advanced_score", 0),
+            reverse=True
+        )[:20] if not is_japan else [],
+        # Data quality
+        "data_quality": data_quality_service.validate_ranking(ranking),
+        "ticker_coverage": data_quality_service.get_ticker_coverage(ranking, len(tickers)),
     }
