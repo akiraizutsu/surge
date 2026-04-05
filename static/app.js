@@ -273,18 +273,21 @@ function renderDashboard(data) {
   const hasRotation   = data.sector_rotation   && data.sector_rotation.length > 0;
   const hasBreakout   = data.breakout_ranking  && data.breakout_ranking.length > 0;
   const hasQuality    = data.momentum_ranking  && data.momentum_ranking.some(r => r.quality_score != null);
+  const hasSeed       = data.seed_ranking      && data.seed_ranking.length > 0;
   const contrarianBtn = document.getElementById('subTabContrarian');
   const timeArbBtn    = document.getElementById('subTabTimeArb');
   const smallcapBtn   = document.getElementById('subTabSmallcap');
   const rotationBtn   = document.getElementById('subTabRotation');
   const breakoutBtn   = document.getElementById('subTabBreakout');
   const qualityBtn    = document.getElementById('subTabQuality');
+  const seedBtn       = document.getElementById('subTabSeed');
   if (contrarianBtn) contrarianBtn.style.display = hasContrarian ? '' : 'none';
   if (timeArbBtn)    timeArbBtn.style.display    = hasTimeArb   ? '' : 'none';
   if (smallcapBtn)   smallcapBtn.style.display   = hasSmallcap  ? '' : 'none';
   if (rotationBtn)   rotationBtn.style.display   = hasRotation  ? '' : 'none';
   if (breakoutBtn)   breakoutBtn.style.display   = hasBreakout  ? '' : 'none';
   if (qualityBtn)    qualityBtn.style.display    = hasQuality   ? '' : 'none';
+  if (seedBtn)       seedBtn.style.display       = hasSeed      ? '' : 'none';
   // Fall back to momentum if active tab has no data
   if (!hasContrarian && activeSubTab === 'contrarian') activeSubTab = 'momentum';
   if (!hasTimeArb    && activeSubTab === 'time_arb')   activeSubTab = 'momentum';
@@ -292,6 +295,7 @@ function renderDashboard(data) {
   if (!hasRotation   && activeSubTab === 'rotation')   activeSubTab = 'momentum';
   if (!hasBreakout   && activeSubTab === 'breakout')   activeSubTab = 'momentum';
   if (!hasQuality    && activeSubTab === 'quality')    activeSubTab = 'momentum';
+  if (!hasSeed       && activeSubTab === 'seed')       activeSubTab = 'momentum';
   switchSubTab(activeSubTab);
 }
 
@@ -426,13 +430,13 @@ function switchSubTab(tab) {
     momentum: 'subTabMomentum', contrarian: 'subTabContrarian',
     rotation: 'subTabRotation', breakout: 'subTabBreakout',
     time_arb: 'subTabTimeArb', smallcap: 'subTabSmallcap',
-    quality: 'subTabQuality',
+    quality: 'subTabQuality', seed: 'subTabSeed',
   };
   document.getElementById(tabBtnMap[tab])?.classList.add('active');
 
   // Hide all sub-tab areas
   ['tableArea', 'contrarianTableArea', 'sectorRotationArea', 'breakoutTableArea',
-   'timeArbTableArea', 'smallcapTableArea', 'qualityMatrixArea'].forEach(id => {
+   'timeArbTableArea', 'smallcapTableArea', 'qualityMatrixArea', 'seedTableArea'].forEach(id => {
     document.getElementById(id)?.classList.add('hidden');
   });
 
@@ -460,6 +464,9 @@ function switchSubTab(tab) {
   } else if (tab === 'quality') {
     document.getElementById('qualityMatrixArea').classList.remove('hidden');
     if (screeningData && screeningData.momentum_ranking) renderQualityMatrix(screeningData.momentum_ranking);
+  } else if (tab === 'seed') {
+    document.getElementById('seedTableArea').classList.remove('hidden');
+    if (screeningData && screeningData.seed_ranking) renderSeedTable(screeningData.seed_ranking);
   }
 }
 
@@ -538,7 +545,7 @@ function showContrarianDetail(stock) {
     </div>
 
     <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">ファンダメンタルズ</h3>
-    <div class="grid grid-cols-3 gap-3">
+    <div class="grid grid-cols-3 gap-3 mb-6">
       ${[
         ['時価総額', stock.market_cap_b ? (isJapanIndex() ? '¥' : '$') + stock.market_cap_b + 'B' : '-'],
         ['PER (予想)', fmtVal(stock.pe_forward)],
@@ -555,10 +562,55 @@ function showContrarianDetail(stock) {
         </div>
       `).join('')}
     </div>
+
+    ${(stock.vg_analyst_gap != null) ? `
+    <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">Sprint 5: Value Gap 分解</h3>
+    <div class="grid grid-cols-2 gap-3">
+      ${[
+        ['アナリスト乖離', stock.vg_analyst_gap, 'text-amber-600 dark:text-amber-400', 'アナリスト目標価格と推奨の複合'],
+        ['キャッシュバリュー', stock.vg_cash_value, 'text-sky-600 dark:text-sky-400', '低PERと配当利回り'],
+        ['クオリティバリュー', stock.vg_quality_value, 'text-emerald-600 dark:text-emerald-400', 'EPS・売上成長の継続'],
+        ['期待リセット', stock.vg_expectation_reset, 'text-violet-600 dark:text-violet-400', '株価下落+RSI低下（失望完了）'],
+      ].map(([l, v, cls, desc]) => `
+        <div class="bg-slate-50 dark:bg-gray-800 rounded-xl p-3 border border-slate-100 dark:border-gray-700">
+          <div class="text-[10px] text-slate-400 dark:text-gray-500 mb-1">${l}</div>
+          <div class="text-2xl font-bold ${cls}">${v != null ? v.toFixed(1) : '-'}</div>
+          <div class="text-[9px] text-slate-400 dark:text-gray-500 mt-1">${desc}</div>
+        </div>
+      `).join('')}
+    </div>` : ''}
   `;
 
   document.getElementById('modal').classList.remove('hidden');
   document.getElementById('modal').classList.add('flex');
+}
+
+// ── Seed Table (Sprint 5) ──
+function renderSeedTable(ranking) {
+  const tbody = document.getElementById('seedTableBody');
+  if (!tbody) return;
+  const fmtPct = (v) => v != null ? (v > 0 ? '+' : '') + v + '%' : '-';
+  const retClass = (v) => v > 0 ? 'text-emerald-600 dark:text-emerald-400' : v < 0 ? 'text-rose-400 dark:text-rose-300' : '';
+
+  tbody.innerHTML = ranking.map((r, idx) => {
+    const tags = (r.seed_tags || []).map(t => `<span class="inline-block px-1.5 py-0.5 text-[9px] rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 font-medium whitespace-nowrap">${t}</span>`).join('');
+    const t = r.technicals || {};
+    return `<tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors" onclick='showDetail(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
+      <td class="px-3 py-2 text-slate-400 text-xs">${idx + 1}</td>
+      <td class="px-3 py-2 font-semibold text-primary-600 dark:text-primary-400 text-xs">${r.ticker}</td>
+      <td class="px-3 py-2 text-slate-500 dark:text-gray-400 text-xs hidden md:table-cell max-w-[150px] truncate">${r.name}</td>
+      <td class="px-3 py-2 text-right">
+        <span class="text-lg font-bold text-teal-600 dark:text-teal-400">${r.seed_score != null ? r.seed_score.toFixed(1) : '-'}</span>
+      </td>
+      <td class="px-3 py-2 text-right font-bold text-xs ${r.capital_grade ? ({'A':'text-emerald-600','B':'text-sky-500','C':'text-amber-500','D':'text-orange-500','F':'text-rose-500'}[r.capital_grade] || '') : ''}">${r.capital_grade || '-'}</td>
+      <td class="px-3 py-2 text-right font-mono text-xs">${formatPrice(r.price)}</td>
+      <td class="px-3 py-2 text-right font-mono text-xs hidden sm:table-cell ${retClass(t.ret_1m)}">${fmtPct(t.ret_1m)}</td>
+      <td class="px-3 py-2 text-xs hidden lg:table-cell">
+        <div class="flex flex-wrap gap-1">${tags}</div>
+      </td>
+      <td class="px-3 py-2 text-xs text-slate-500 dark:text-gray-400 hidden xl:table-cell max-w-[180px] truncate">${r.seed_note || '-'}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ── Breadth Chart ──
@@ -1214,6 +1266,52 @@ async function showDetail(stock) {
           return `<span class="inline-block mt-2 px-2.5 py-1 text-sm font-semibold rounded-full ${edCls}">${stock.entry_difficulty}</span>`;
         })() : '-'}
       </div>
+    </div>` : ''}
+
+    ${(stock.seed_score != null && stock.seed_score >= 20) ? `
+    <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">種まき度スコア（日本株）</h3>
+    <div class="bg-teal-50 dark:bg-teal-950/20 rounded-xl p-4 mb-6 border border-teal-100 dark:border-teal-900/30">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <div class="text-xs text-slate-500 dark:text-gray-400">種まき度スコア</div>
+          <div class="text-3xl font-bold text-teal-600 dark:text-teal-400">${stock.seed_score.toFixed(1)}</div>
+        </div>
+        <div class="flex flex-wrap gap-1 justify-end">
+          ${(stock.seed_tags || []).map(tag => `<span class="inline-block px-2 py-0.5 text-[10px] rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-400 font-medium">${tag}</span>`).join('')}
+        </div>
+      </div>
+      ${stock.seed_note ? `<div class="text-xs text-slate-500 dark:text-gray-400">${stock.seed_note}</div>` : ''}
+      ${stock.seed_components ? `
+      <div class="grid grid-cols-5 gap-1.5 mt-3">
+        ${[['設備投資', stock.seed_components.capex_surge], ['CF黒字', stock.seed_components.ocf_positive], ['売上', stock.seed_components.revenue_growth], ['利益減', stock.seed_components.earnings_dip], ['株価低下', stock.seed_components.price_disappoint]].map(([l, v]) => `
+          <div class="text-center">
+            <div class="text-[9px] text-slate-400 dark:text-gray-500">${l}</div>
+            <div class="text-xs font-semibold text-teal-600 dark:text-teal-400">${v != null ? v.toFixed(0) : '-'}</div>
+          </div>`).join('')}
+      </div>` : ''}
+    </div>` : ''}
+
+    ${stock.capital_score != null ? `
+    <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">資本配分スコア</h3>
+    <div class="bg-indigo-50 dark:bg-indigo-950/20 rounded-xl p-4 mb-6 border border-indigo-100 dark:border-indigo-900/30">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <div class="text-xs text-slate-500 dark:text-gray-400">資本配分スコア</div>
+          <div class="text-3xl font-bold text-indigo-600 dark:text-indigo-400">${stock.capital_score.toFixed(1)}</div>
+        </div>
+        <span class="text-2xl font-bold px-3 py-1 rounded-lg ${{'A':'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400','B':'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400','C':'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400','D':'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400','F':'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400'}[stock.capital_grade] || 'bg-gray-100 text-gray-500'}">${stock.capital_grade || '-'}</span>
+      </div>
+      ${stock.capital_components ? `
+      <div class="grid grid-cols-4 gap-2">
+        ${[['営業CF', 'ocf_stability'], ['設備投資', 'capex_consistency'], ['FCF', 'fcf_quality'], ['ネットキャッシュ', 'net_cash_strength'], ['希薄化', 'dilution_risk'], ['負債耐性', 'debt_tolerance'], ['株主還元', 'shareholder_return'], ['M&A余力', 'mna_capacity']].map(([l, k]) => {
+          const v = stock.capital_components[k] ?? 0;
+          const pips = [1,2,3,4,5].map(i => `<span class="inline-block w-2 h-2 rounded-full ${i <= v ? 'bg-indigo-500 dark:bg-indigo-400' : 'bg-slate-200 dark:bg-gray-700'}"></span>`).join('');
+          return `<div class="bg-white dark:bg-gray-800 rounded-lg p-2 text-center border border-slate-100 dark:border-gray-700">
+            <div class="text-[9px] text-slate-400 dark:text-gray-500 mb-1">${l}</div>
+            <div class="flex gap-0.5 justify-center">${pips}</div>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
     </div>` : ''}
 
     <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">テクニカル指標</h3>

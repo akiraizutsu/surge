@@ -277,6 +277,10 @@
         class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
         品質マトリクス
       </button>
+      <button id="subTabSeed" onclick="switchSubTab('seed')"
+        class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
+        種まき度
+      </button>
     </div>
 
     <!-- Momentum Table -->
@@ -456,6 +460,31 @@
       <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-4">
         <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">エントリー難易度別銘柄一覧</h3>
         <div id="qualityMatrixLegend" class="space-y-0"></div>
+      </div>
+    </div>
+
+    <!-- Sprint 5: Seed Ranking Table -->
+    <div id="seedTableArea" class="hidden">
+      <div class="mb-2 px-1 text-xs text-slate-400 dark:text-gray-500">
+        先行投資フェーズを市場が誤認している可能性のある銘柄。設備投資急増・営業CF黒字・売上成長継続・株価失望の組み合わせを検出します。
+      </div>
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50">
+              <th class="px-3 py-2 text-left text-xs font-medium text-slate-500">#</th>
+              <th class="px-3 py-2 text-left text-xs font-medium text-slate-500">銘柄</th>
+              <th class="px-3 py-2 text-left text-xs font-medium text-slate-500 hidden md:table-cell">名称</th>
+              <th class="px-3 py-2 text-right text-xs font-medium text-slate-500">種まき度</th>
+              <th class="px-3 py-2 text-right text-xs font-medium text-slate-500">資本配分</th>
+              <th class="px-3 py-2 text-right text-xs font-medium text-slate-500">株価</th>
+              <th class="px-3 py-2 text-right text-xs font-medium text-slate-500 hidden sm:table-cell">1M</th>
+              <th class="px-3 py-2 text-left text-xs font-medium text-slate-500 hidden lg:table-cell">タグ</th>
+              <th class="px-3 py-2 text-left text-xs font-medium text-slate-500 hidden xl:table-cell">メモ</th>
+            </tr>
+          </thead>
+          <tbody id="seedTableBody"></tbody>
+        </table>
       </div>
     </div>
 
