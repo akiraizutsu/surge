@@ -754,6 +754,17 @@ def get_fundamentals(tickers, progress_cb=None, is_japan=False):
                 "short_change_pct": short_change_pct,
                 "earnings_date": earnings_date,
                 "days_to_earnings": days_to_earnings,
+                # Sprint 5: cashflow fields for seed_score / capital_allocation
+                "operatingCashflow": info.get("operatingCashflow"),
+                "freeCashflow": info.get("freeCashflow"),
+                "capitalExpenditures": info.get("capitalExpenditures"),
+                "totalRevenue": info.get("totalRevenue"),
+                "totalCash": info.get("totalCash"),
+                "totalDebt": info.get("totalDebt"),
+                "sharesOutstanding": info.get("sharesOutstanding"),
+                "floatShares": info.get("floatShares"),
+                "payoutRatio": info.get("payoutRatio"),
+                "marketCap": info.get("marketCap"),
             })
         except Exception:
             fundamentals.append({"ticker": ticker, "short_name": ticker, "error": True})
@@ -790,6 +801,10 @@ def compute_squeeze_score(ranking):
     df.loc[~has_data, "squeeze_score"] = None
 
     return df
+
+
+def _clamp_01(v: float) -> float:
+    return max(0.0, min(1.0, v))
 
 
 def compute_value_gap(all_results, fundamentals_list, is_japan=False):
@@ -886,23 +901,26 @@ def compute_value_gap(all_results, fundamentals_list, is_japan=False):
 
     cdf = cdf.sort_values("value_gap_score", ascending=False)
 
+    # Pre-compute inverse ret_1m rank for expectation reset (outside loop)
+    cdf["s_ret_1m_inv"] = 1 - cdf["ret_1m"].rank(pct=True)
+    div_max = float(cdf["dividend_yield"].max() or 1)
+
     result = []
     for rank_idx, (_, row) in enumerate(cdf.iterrows(), 1):
         # ── Sprint 5: Value Gap sub-category decomposition ────────────────────
-        # Analyst Gap:     target price upside (s_gap × s_rec)
-        # Cash Value:      low PE + high dividend yield
-        # Quality Value:   earnings growth intact + revenue growth
-        # Expectation Reset: price already down + RSI low (reset happened)
+        # Analyst Gap: target price upside + analyst recommendation
         vg_analyst  = round((float(row["s_gap"]) * 0.6 + float(row["s_rec"]) * 0.4) * 100, 1)
-        pe_s  = 1 - float(cdf.loc[cdf["ticker"] == row["ticker"], "s_pe"].iloc[0]) if len(cdf.loc[cdf["ticker"] == row["ticker"]]) > 0 else 0.5
-        div_s = float(row.get("dividend_yield", 0) or 0) / max(float(cdf["dividend_yield"].max() or 1), 0.001)
-        vg_cash     = round(_clamp_01(pe_s * 0.6 + div_s * 0.4) * 100, 1)
+        # Cash Value: low PE (s_pe already = 1-rank_pct, higher = cheaper PE)
+        #             + high dividend yield
+        s_pe_val = float(row["s_pe"]) if isinstance(row["s_pe"], (int, float)) else 0.5
+        div_s = float(row.get("dividend_yield", 0) or 0) / max(div_max, 0.001)
+        vg_cash     = round(_clamp_01(s_pe_val * 0.6 + div_s * 0.4) * 100, 1)
+        # Quality Value: earnings growth + revenue growth intact
         vg_quality  = round((float(row["s_eps"]) * 0.5 + float(row["s_rev"]) * 0.5) * 100, 1)
-        # Expectation reset: stock down a lot (low ret_1m pct) + RSI low
-        ret_pct_inv = 1 - (float(cdf["ret_1m"].rank(pct=True).loc[cdf["ticker"] == row["ticker"]].iloc[0]) if len(cdf.loc[cdf["ticker"] == row["ticker"]]) > 0 else 0.5)
-        rsi_val = float(row.get("rsi", 50) or 50)
-        rsi_inv = 1 - (rsi_val / 100)
-        vg_reset    = round((ret_pct_inv * 0.6 + rsi_inv * 0.4) * 100, 1)
+        # Expectation Reset: stock already sold off (ret_1m very negative) + RSI low
+        ret_inv = float(row["s_ret_1m_inv"])
+        rsi_inv = 1 - (_clamp_01(float(row.get("rsi", 50) or 50) / 100))
+        vg_reset    = round((ret_inv * 0.6 + rsi_inv * 0.4) * 100, 1)
 
         result.append({
             "rank": rank_idx,
@@ -935,10 +953,6 @@ def compute_value_gap(all_results, fundamentals_list, is_japan=False):
         })
 
     return result
-
-
-def _clamp_01(v: float) -> float:
-    return max(0.0, min(1.0, v))
 
 
 # ── Time Arbitrage ─────────────────────────────────────────────────────────────
