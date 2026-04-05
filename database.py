@@ -181,6 +181,16 @@ def init_db():
                 detail_json TEXT,
                 created_at TEXT DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS watchlist_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                index_name TEXT,
+                event_type TEXT NOT NULL,
+                payload_json TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                is_read INTEGER DEFAULT 0
+            );
         """)
 
         # ── Schema migrations: add columns to existing tables ──────────────
@@ -665,6 +675,123 @@ def get_watchlist():
     rows = conn.execute("SELECT ticker FROM watchlist ORDER BY added_at DESC").fetchall()
     conn.close()
     return [r["ticker"] for r in rows]
+
+
+# ── Watchlist Events (Sprint 6) ──
+
+def save_watchlist_events(events: list[dict]):
+    """Persist change-detection events. events = [{ticker, index_name, event_type, payload_json}]"""
+    if not events:
+        return
+    conn = _connect()
+    with conn:
+        conn.executemany(
+            """INSERT INTO watchlist_events (ticker, index_name, event_type, payload_json)
+               VALUES (:ticker, :index_name, :event_type, :payload_json)""",
+            events,
+        )
+    conn.close()
+
+
+def get_unread_events(index_name=None, limit=50):
+    """Return unread events, optionally filtered by index."""
+    import json as _json
+    conn = _connect()
+    if index_name:
+        rows = conn.execute(
+            """SELECT * FROM watchlist_events WHERE is_read = 0 AND index_name = ?
+               ORDER BY id DESC LIMIT ?""",
+            (index_name, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM watchlist_events WHERE is_read = 0 ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    result = []
+    for r in rows:
+        row = dict(r)
+        try:
+            row["payload"] = _json.loads(r["payload_json"]) if r["payload_json"] else {}
+        except Exception:
+            row["payload"] = {}
+        result.append(row)
+    conn.close()
+    return result
+
+
+def get_all_events(index_name=None, limit=100):
+    """Return all recent events (read + unread)."""
+    import json as _json
+    conn = _connect()
+    if index_name:
+        rows = conn.execute(
+            """SELECT * FROM watchlist_events WHERE index_name = ?
+               ORDER BY id DESC LIMIT ?""",
+            (index_name, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM watchlist_events ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    result = []
+    for r in rows:
+        row = dict(r)
+        try:
+            row["payload"] = _json.loads(r["payload_json"]) if r["payload_json"] else {}
+        except Exception:
+            row["payload"] = {}
+        result.append(row)
+    conn.close()
+    return result
+
+
+def mark_events_read(event_ids: list[int]):
+    """Mark specific events as read."""
+    if not event_ids:
+        return
+    conn = _connect()
+    with conn:
+        conn.execute(
+            f"UPDATE watchlist_events SET is_read = 1 WHERE id IN ({','.join('?' * len(event_ids))})",
+            event_ids,
+        )
+    conn.close()
+
+
+def mark_all_events_read(index_name=None):
+    """Mark all events as read, optionally for a specific index."""
+    conn = _connect()
+    with conn:
+        if index_name:
+            conn.execute(
+                "UPDATE watchlist_events SET is_read = 1 WHERE index_name = ?", (index_name,)
+            )
+        else:
+            conn.execute("UPDATE watchlist_events SET is_read = 1")
+    conn.close()
+
+
+def get_prev_ranking(index_name: str, limit=50) -> list[dict]:
+    """Return the second-to-latest session's ranking for diff comparison."""
+    conn = _connect()
+    sessions = conn.execute(
+        "SELECT id FROM screening_sessions WHERE index_name = ? ORDER BY id DESC LIMIT 2",
+        (index_name,),
+    ).fetchall()
+    if len(sessions) < 2:
+        conn.close()
+        return []
+    prev_session_id = sessions[1]["id"]
+    rows = conn.execute(
+        """SELECT ticker, rank, momentum_score, quality_score, entry_difficulty,
+                  rs_1m, rs_3m, dist_from_high, days_to_earnings
+           FROM screening_results WHERE session_id = ? ORDER BY rank LIMIT ?""",
+        (prev_session_id, limit),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 # ── CF Cache ──

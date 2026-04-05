@@ -254,6 +254,10 @@ function renderDashboard(data) {
   // Regime card
   renderRegimeCard(data.regime || null);
 
+  // Sprint 6: Daily report panel + change detection
+  renderDailyReport(data.daily_report || null, data.changes || null);
+  updateNotificationBadge();
+
   // Charts
   document.getElementById('chartsArea').classList.remove('hidden');
   document.getElementById('rsiChartArea').classList.remove('hidden');
@@ -775,6 +779,15 @@ function renderTable(ranking) {
       };
       const edCls = ED_BG[r.entry_difficulty] || 'bg-gray-100 dark:bg-gray-800 text-gray-500';
       status += `<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full ${edCls} font-medium">${r.entry_difficulty}</span>`;
+    }
+    // Sprint 6: NEW badge for new entries
+    const changes = screeningData && screeningData.changes;
+    if (changes && changes.new_entries && changes.new_entries.some(e => e.ticker === r.ticker)) {
+      status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 font-bold">NEW</span>';
+    }
+    if (changes && changes.score_surges && changes.score_surges.some(e => e.ticker === r.ticker)) {
+      const se = changes.score_surges.find(e => e.ticker === r.ticker);
+      status += `<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 font-bold">↑${se.score_delta > 0 ? '+' : ''}${se.score_delta}</span>`;
     }
 
     return `<tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors" onclick='showDetail(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
@@ -2015,6 +2028,166 @@ function renderBacktestResult(bt) {
         </tbody>
       </table>
     </div>`;
+}
+
+// ── Sprint 6: Daily Report ────────────────────────────────────────────────────
+
+function renderDailyReport(report, changes) {
+  const el = document.getElementById('dailyReportPanel');
+  if (!el) return;
+  if (!report && (!changes || !changes.new_entries || changes.new_entries.length === 0)) {
+    el.classList.add('hidden');
+    return;
+  }
+
+  const r = report || {};
+  const highlights = r.highlights || [];
+  const wlAlerts   = r.watchlist_alerts || [];
+  const initCands  = r.initial_candidates || [];
+  const streakCands = r.streak_candidates || [];
+  const cautionCands = r.caution_candidates || [];
+
+  const hasAnyContent = highlights.length || wlAlerts.length || initCands.length || streakCands.length || cautionCands.length;
+  if (!hasAnyContent) { el.classList.add('hidden'); return; }
+
+  const mkBadge = (items, color) => items.map(c =>
+    `<span class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg ${color} font-medium">
+       <span class="font-bold">${c.ticker}</span>
+       <span class="opacity-75">${c.reason || ''}</span>
+     </span>`
+  ).join('');
+
+  el.innerHTML = `
+    <div class="card border border-teal-200 dark:border-teal-900/40 bg-teal-50/40 dark:bg-teal-950/20">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-lg">📋</span>
+        <h3 class="font-semibold text-slate-800 dark:text-gray-100 text-sm">日次レポート</h3>
+        ${r.regime_text ? `<span class="ml-auto text-xs text-teal-600 dark:text-teal-400 font-medium">${r.regime_text}</span>` : ''}
+      </div>
+      ${highlights.length ? `
+        <ul class="space-y-1 mb-3">
+          ${highlights.map(h => `<li class="text-xs text-slate-600 dark:text-gray-300 flex items-start gap-1.5"><span class="text-teal-500 mt-0.5">•</span>${h}</li>`).join('')}
+        </ul>` : ''}
+      ${wlAlerts.length ? `
+        <div class="mb-3">
+          <div class="text-[10px] uppercase tracking-wide text-rose-500 dark:text-rose-400 font-semibold mb-1">ウォッチリスト</div>
+          <ul class="space-y-1">
+            ${wlAlerts.map(a => `<li class="text-xs text-slate-600 dark:text-gray-300 flex items-start gap-1.5"><span class="text-rose-400 mt-0.5">!</span>${a}</li>`).join('')}
+          </ul>
+        </div>` : ''}
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
+        ${initCands.length ? `
+          <div>
+            <div class="text-[10px] uppercase tracking-wide text-violet-500 dark:text-violet-400 font-semibold mb-1.5">🌱 初動候補</div>
+            <div class="flex flex-wrap gap-1">${mkBadge(initCands, 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300')}</div>
+          </div>` : ''}
+        ${streakCands.length ? `
+          <div>
+            <div class="text-[10px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400 font-semibold mb-1.5">💪 継続強者</div>
+            <div class="flex flex-wrap gap-1">${mkBadge(streakCands, 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300')}</div>
+          </div>` : ''}
+        ${cautionCands.length ? `
+          <div>
+            <div class="text-[10px] uppercase tracking-wide text-rose-500 dark:text-rose-400 font-semibold mb-1.5">⚠️ 過熱注意</div>
+            <div class="flex flex-wrap gap-1">${mkBadge(cautionCands, 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300')}</div>
+          </div>` : ''}
+      </div>
+    </div>
+  `;
+  el.classList.remove('hidden');
+}
+
+
+// ── Sprint 6: Notification Drawer ─────────────────────────────────────────────
+
+const EVENT_TYPE_LABELS = {
+  new_entry:    { icon: '🆕', label: '新規ランクイン', cls: 'border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/20' },
+  dropped:      { icon: '📉', label: 'ランクアウト',   cls: 'border-rose-200 dark:border-rose-800 bg-rose-50/50 dark:bg-rose-950/20' },
+  score_surge:  { icon: '🚀', label: 'スコア急上昇',   cls: 'border-yellow-200 dark:border-yellow-800 bg-yellow-50/50 dark:bg-yellow-950/20' },
+  score_drop:   { icon: '⬇️', label: 'スコア急落',     cls: 'border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20' },
+  earnings_soon:{ icon: '📅', label: '決算接近',       cls: 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20' },
+  near_52w_high:{ icon: '🏔️', label: '52W高値接近',   cls: 'border-sky-200 dark:border-sky-800 bg-sky-50/50 dark:bg-sky-950/20' },
+};
+
+async function updateNotificationBadge() {
+  try {
+    const idx = activeTab ? (activeTab.includes('nikkei') || activeTab.includes('growth') ? activeTab : activeTab) : null;
+    const url = idx ? `/api/watchlist/events/unread_count` : '/api/watchlist/events/unread_count';
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const counts = await res.json();
+    const total = Object.values(counts).reduce((s, v) => s + v, 0);
+    const badge = document.getElementById('notifBadge');
+    if (!badge) return;
+    if (total > 0) {
+      badge.textContent = total > 99 ? '99+' : total;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  } catch (_) {}
+}
+
+async function showNotificationDrawer() {
+  const drawer = document.getElementById('notificationDrawer');
+  const list   = document.getElementById('notificationList');
+  if (!drawer || !list) return;
+
+  drawer.classList.remove('hidden');
+  drawer.classList.add('flex');
+  list.innerHTML = '<p class="text-sm text-slate-400 text-center py-8">読み込み中...</p>';
+
+  try {
+    const res = await fetch(`/api/watchlist/events?limit=80`);
+    const events = await res.json();
+    if (!Array.isArray(events) || events.length === 0) {
+      list.innerHTML = '<p class="text-sm text-slate-400 dark:text-gray-500 text-center py-8">通知はありません</p>';
+      return;
+    }
+    list.innerHTML = events.map(ev => {
+      const meta = EVENT_TYPE_LABELS[ev.event_type] || { icon: '🔔', label: ev.event_type, cls: 'border-slate-200 dark:border-gray-700' };
+      const payload = ev.payload || {};
+      const unreadCls = ev.is_read ? 'opacity-60' : '';
+      const scorePart = payload.score != null ? ` スコア${payload.score}` : '';
+      const deltaPart = payload.score_delta != null ? ` (${payload.score_delta > 0 ? '+' : ''}${payload.score_delta})` : '';
+      const rankPart  = payload.rank ? ` #${payload.rank}` : (payload.prev_rank ? ` 前回#${payload.prev_rank}` : '');
+      const detail    = `${rankPart}${scorePart}${deltaPart}`;
+      return `
+        <div class="flex items-start gap-3 p-3 rounded-xl border ${meta.cls} ${unreadCls}">
+          <span class="text-lg leading-none mt-0.5">${meta.icon}</span>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-semibold text-sm text-slate-800 dark:text-gray-100">${ev.ticker}</span>
+              <span class="text-xs px-1.5 py-0.5 rounded-full bg-white/60 dark:bg-gray-800/60 text-slate-500 dark:text-gray-400">${meta.label}</span>
+              ${!ev.is_read ? '<span class="w-2 h-2 rounded-full bg-rose-500 flex-shrink-0"></span>' : ''}
+            </div>
+            ${detail ? `<p class="text-xs text-slate-500 dark:text-gray-400 mt-0.5">${detail}</p>` : ''}
+            <p class="text-[10px] text-slate-400 dark:text-gray-600 mt-1">${ev.created_at || ''}</p>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = `<p class="text-sm text-rose-400 text-center py-8">読み込み失敗: ${e.message}</p>`;
+  }
+}
+
+function closeNotificationDrawer() {
+  const drawer = document.getElementById('notificationDrawer');
+  if (drawer) { drawer.classList.add('hidden'); drawer.classList.remove('flex'); }
+}
+
+async function markAllNotificationsRead() {
+  try {
+    await fetch('/api/watchlist/events/read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ all: true }),
+    });
+    // Refresh drawer and badge
+    const badge = document.getElementById('notifBadge');
+    if (badge) badge.classList.add('hidden');
+    await showNotificationDrawer();
+  } catch (_) {}
 }
 
 init();

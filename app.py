@@ -31,6 +31,7 @@ from database import (
     get_edinet_cached_financials, save_edinet_financials,
     get_stock_explain,
     save_backtest_result, get_backtest_results,
+    get_unread_events, get_all_events, mark_events_read, mark_all_events_read,
 )
 import backtest_service
 from scoring_service import WEIGHT_PRESETS
@@ -498,6 +499,45 @@ def api_seed_score(ticker):
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ── Sprint 6: Watchlist Events / Change Detection ────────────────────────────
+
+@app.get("/api/watchlist/events")
+def api_watchlist_events():
+    """Return recent watchlist events (change alerts). ?unread_only=1 filters unread."""
+    index_name = request.args.get("index")
+    unread_only = request.args.get("unread_only", "0") == "1"
+    limit = request.args.get("limit", 100, type=int)
+    if unread_only:
+        events = get_unread_events(index_name=index_name, limit=limit)
+    else:
+        events = get_all_events(index_name=index_name, limit=limit)
+    return jsonify(events)
+
+
+@app.post("/api/watchlist/events/read")
+def api_mark_events_read():
+    """Mark events as read. Body: { ids: [1,2,3] } or { all: true, index: 'nikkei225' }"""
+    body = request.get_json(silent=True) or {}
+    if body.get("all"):
+        mark_all_events_read(index_name=body.get("index"))
+    else:
+        ids = [int(i) for i in body.get("ids", []) if str(i).isdigit()]
+        mark_events_read(ids)
+    return jsonify({"status": "ok"})
+
+
+@app.get("/api/watchlist/events/unread_count")
+def api_unread_event_count():
+    """Return count of unread events per index."""
+    from database import _connect
+    conn = _connect()
+    rows = conn.execute(
+        "SELECT index_name, COUNT(*) as cnt FROM watchlist_events WHERE is_read = 0 GROUP BY index_name"
+    ).fetchall()
+    conn.close()
+    return jsonify({r["index_name"]: r["cnt"] for r in rows})
 
 
 # ── CF Analysis (EDINET DB) ──

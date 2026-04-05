@@ -124,6 +124,11 @@
         class="inline-flex items-center justify-center h-9 sm:h-10 px-3 sm:px-4 text-xs sm:text-sm font-medium border border-slate-200 dark:border-gray-700 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer">
         履歴
       </button>
+      <button id="btnNotifications" onclick="showNotificationDrawer()" title="変化通知"
+        class="relative inline-flex items-center justify-center h-9 sm:h-10 px-3 sm:px-4 text-xs sm:text-sm font-medium border border-slate-200 dark:border-gray-700 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer">
+        🔔
+        <span id="notifBadge" class="hidden absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-rose-500 text-white rounded-full flex items-center justify-center"></span>
+      </button>
       <div class="flex items-center gap-1.5 sm:gap-2 leading-normal">
         <label for="topN" class="text-xs sm:text-sm text-slate-500 dark:text-gray-400">上位</label>
         <select id="topN" class="rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:ring-2 focus:ring-primary-500/50">
@@ -182,6 +187,9 @@
 
     <!-- Market Regime Card -->
     <div id="regimeCard" class="hidden"></div>
+
+    <!-- Sprint 6: Daily Report Panel -->
+    <div id="dailyReportPanel" class="hidden"></div>
 
     <!-- Charts -->
     <div id="chartsArea" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -447,6 +455,22 @@
     </div>
 
   </main>
+
+  <!-- Sprint 6: Notification Drawer -->
+  <div id="notificationDrawer" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4" onclick="if(event.target===this)closeNotificationDrawer()">
+    <div class="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-xl max-h-[80vh] flex flex-col shadow-xl border border-slate-200 dark:border-gray-800">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-gray-800">
+        <h2 class="text-base font-semibold text-slate-900 dark:text-gray-100">変化通知 / アラート</h2>
+        <div class="flex items-center gap-2">
+          <button onclick="markAllNotificationsRead()" class="text-xs text-slate-400 dark:text-gray-500 hover:text-primary-500 transition-colors cursor-pointer">すべて既読</button>
+          <button onclick="closeNotificationDrawer()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer text-slate-400 dark:text-gray-500">✕</button>
+        </div>
+      </div>
+      <div id="notificationList" class="overflow-y-auto flex-1 p-4 space-y-2">
+        <p class="text-sm text-slate-400 dark:text-gray-500 text-center py-8">通知はありません</p>
+      </div>
+    </div>
+  </div>
 
   <!-- Sprint 4: Session History Modal -->
   <div id="historyModal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4" onclick="if(event.target===this)closeHistoryModal()">
