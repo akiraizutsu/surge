@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SURGE — How to Use</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <script>
+    (function(){const s=localStorage.getItem('dark-mode');if(s===null||s==='true')document.documentElement.classList.add('dark');})();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/style.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        fontFamily: {
+          sans: ['"Zen Kaku Gothic New"', 'Ubuntu', 'system-ui', 'sans-serif'],
+          mono: ['Ubuntu Mono', 'ui-monospace', 'monospace'],
+        },
+        extend: {
+          colors: {
+            primary: {
+              50:  'hsl(var(--hue) 90% 96%)',
+              100: 'hsl(var(--hue) 85% 90%)',
+              200: 'hsl(var(--hue) 80% 80%)',
+              300: 'hsl(var(--hue) 75% 68%)',
+              400: 'hsl(var(--hue) 70% 55%)',
+              500: 'hsl(var(--hue) 65% 45%)',
+              600: 'hsl(var(--hue) 65% 38%)',
+              700: 'hsl(var(--hue) 60% 30%)',
+              800: 'hsl(var(--hue) 55% 23%)',
+              900: 'hsl(var(--hue) 50% 17%)',
+              950: 'hsl(var(--hue) 45% 10%)',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root { --hue: 187; }
+    .section-anchor { scroll-margin-top: 80px; }
+    .toc-link { @apply text-slate-500 dark:text-gray-400 hover:text-primary-500 dark:hover:text-primary-400 transition-colors text-sm; }
+    .badge { @apply inline-block px-2 py-0.5 text-xs rounded-full font-medium; }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-gray-100 min-h-screen">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-30 bg-primary-600/90 dark:bg-primary-950/80 backdrop-blur text-white shadow-sm">
+    <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <img src="/static/favicon.svg" class="w-7 h-7" alt="SURGE">
+        <span class="font-bold text-lg tracking-wide">SURGE</span>
+        <span class="text-primary-200 text-sm hidden sm:inline">使い方ガイド</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/" class="text-sm text-primary-200 hover:text-white transition-colors">← 日本株</a>
+        <a href="/us" class="text-sm text-primary-200 hover:text-white transition-colors">米国株 →</a>
+        <button onclick="toggleDark()" class="text-xl px-2" title="ダークモード切替" id="darkToggle">☀</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="max-w-5xl mx-auto px-4 py-10 flex gap-8">
+
+    <!-- TOC Sidebar -->
+    <aside class="hidden lg:block w-52 shrink-0">
+      <nav class="sticky top-24 space-y-1">
+        <p class="text-[10px] font-semibold text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-3">目次</p>
+        <a href="#overview"    class="toc-link block py-1">概要</a>
+        <a href="#screening"   class="toc-link block py-1">スクリーニング実行</a>
+        <a href="#score"       class="toc-link block py-1">モメンタムスコア</a>
+        <a href="#subtabs"     class="toc-link block py-1">分析タブ一覧</a>
+        <a href="#momentum"    class="toc-link block py-1 pl-3">└ モメンタム</a>
+        <a href="#contrarian"  class="toc-link block py-1 pl-3">└ 逆張り候補</a>
+        <a href="#rotation"    class="toc-link block py-1 pl-3">└ セクター回転</a>
+        <a href="#breakout"    class="toc-link block py-1 pl-3">└ ブレイクアウト</a>
+        <a href="#quality"     class="toc-link block py-1 pl-3">└ 品質マトリクス</a>
+        <a href="#seed"        class="toc-link block py-1 pl-3">└ 種まき度（日本株）</a>
+        <a href="#usadvanced"  class="toc-link block py-1 pl-3">└ 米国株分析</a>
+        <a href="#regime"      class="toc-link block py-1">市場レジーム</a>
+        <a href="#report"      class="toc-link block py-1">日次レポート</a>
+        <a href="#notify"      class="toc-link block py-1">変化通知</a>
+        <a href="#detail"      class="toc-link block py-1">銘柄詳細モーダル</a>
+        <a href="#cf"          class="toc-link block py-1">CF分析（日本株）</a>
+        <a href="#backtest"    class="toc-link block py-1">バックテスト</a>
+        <a href="#watchlist"   class="toc-link block py-1">ウォッチリスト</a>
+        <a href="#history"     class="toc-link block py-1">履歴</a>
+        <a href="#customize"   class="toc-link block py-1">カスタマイズ</a>
+        <a href="#rs"          class="toc-link block py-1">相対強度 (RS) 判定</a>
+        <a href="#disclaimer"  class="toc-link block py-1">免責事項</a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 min-w-0 space-y-12">
+
+      <!-- Overview -->
+      <section id="overview" class="section-anchor">
+        <h1 class="text-3xl font-bold text-primary-600 dark:text-primary-400 mb-2">Surge v2 使い方ガイド</h1>
+        <p class="text-slate-500 dark:text-gray-400 text-sm mb-6">S&P 500 / NASDAQ 100 / 日経225 / グロース250 のモメンタムスクリーニングダッシュボード</p>
+
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
+            <div class="text-2xl mb-2">🇯🇵</div>
+            <h3 class="font-semibold mb-1">日本株ページ <code class="text-xs bg-slate-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">/</code></h3>
+            <p class="text-sm text-slate-500 dark:text-gray-400">日経225・グロース250。CF分析・種まき度・タイム裁定・小型優良株など日本株特有の機能を搭載。</p>
+          </div>
+          <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
+            <div class="text-2xl mb-2">🇺🇸</div>
+            <h3 class="font-semibold mb-1">米国株ページ <code class="text-xs bg-slate-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">/us</code></h3>
+            <p class="text-sm text-slate-500 dark:text-gray-400">S&P 500・NASDAQ 100。ショートスクイーズ・EPS改定・機関投資家フロー・決算後ドリフトを分析。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screening -->
+      <section id="screening" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">スクリーニング実行</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-6 space-y-4">
+          <div class="flex items-start gap-4">
+            <span class="flex-shrink-0 w-8 h-8 bg-primary-500 text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
+            <div>
+              <p class="font-medium">インデックスを選択</p>
+              <p class="text-sm text-slate-500 dark:text-gray-400 mt-1">ページ上部のタブ（日経225 / グロース250 / S&P 500 / NASDAQ 100）で対象市場を選ぶ。</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-4">
+            <span class="flex-shrink-0 w-8 h-8 bg-primary-500 text-white rounded-full flex items-center justify-center text-sm font-bold">2</span>
+            <div>
+              <p class="font-medium">「スクリーニング実行」をクリック</p>
+              <p class="text-sm text-slate-500 dark:text-gray-400 mt-1">全銘柄のデータをYahoo Financeから取得し、複合スコアを計算する。日経225で約3〜5分かかる。</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-4">
+            <span class="flex-shrink-0 w-8 h-8 bg-primary-500 text-white rounded-full flex items-center justify-center text-sm font-bold">3</span>
+            <div>
+              <p class="font-medium">結果は自動保存される</p>
+              <p class="text-sm text-slate-500 dark:text-gray-400 mt-1">再読み込みやページ遷移後も前回の結果を自動復元。「上位 N 銘柄」セレクタで表示数を変更可能（10/20/30/50）。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Score -->
+      <section id="score" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">モメンタムスコア（100点満点）</h2>
+        <p class="text-sm text-slate-500 dark:text-gray-400 mb-4">6指標のパーセンタイルランクを加重平均した総合スコア。スコアが高いほど「勢いがある」銘柄。</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800">
+            <thead class="bg-slate-50 dark:bg-gray-800/50 text-xs text-slate-500">
+              <tr>
+                <th class="px-4 py-3 text-left">指標</th>
+                <th class="px-4 py-3 text-left">内容</th>
+                <th class="px-4 py-3 text-right">ウェイト</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-gray-800">
+              <tr><td class="px-4 py-3 font-medium">1ヶ月リターン</td><td class="px-4 py-3 text-slate-500 dark:text-gray-400">直近1ヶ月の価格上昇率</td><td class="px-4 py-3 text-right text-primary-500 font-mono">20%</td></tr>
+              <tr><td class="px-4 py-3 font-medium">3ヶ月リターン</td><td class="px-4 py-3 text-slate-500 dark:text-gray-400">直近3ヶ月の価格上昇率</td><td class="px-4 py-3 text-right text-primary-500 font-mono">20%</td></tr>
+              <tr><td class="px-4 py-3 font-medium">出来高比</td><td class="px-4 py-3 text-slate-500 dark:text-gray-400">5日平均出来高 ÷ 20日平均出来高</td><td class="px-4 py-3 text-right text-primary-500 font-mono">15%</td></tr>
+              <tr><td class="px-4 py-3 font-medium">MA乖離率</td><td class="px-4 py-3 text-slate-500 dark:text-gray-400">株価と50日移動平均線の乖離</td><td class="px-4 py-3 text-right text-primary-500 font-mono">15%</td></tr>
+              <tr><td class="px-4 py-3 font-medium">MACDヒストグラム</td><td class="px-4 py-3 text-slate-500 dark:text-gray-400">トレンドの強さ・方向性</td><td class="px-4 py-3 text-right text-primary-500 font-mono">15%</td></tr>
+              <tr><td class="px-4 py-3 font-medium">RSI</td><td class="px-4 py-3 text-slate-500 dark:text-gray-400">14日相対力指数</td><td class="px-4 py-3 text-right text-primary-500 font-mono">15%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-4 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl text-sm text-amber-700 dark:text-amber-400">
+          <strong>ウェイトプリセット:</strong> 「バランス型 / 出来高重視 / トレンド重視 / 初動特化 / リバーサル」の5種から切替可能。スクリーニング済みデータを即座に再計算する。
+        </div>
+      </section>
+
+      <!-- Sub Tabs -->
+      <section id="subtabs" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">分析タブ一覧</h2>
+        <p class="text-sm text-slate-500 dark:text-gray-400 mb-6">スクリーニング完了後に表示されるタブ。データがある場合のみ表示される。</p>
+
+        <!-- Momentum -->
+        <div id="momentum" class="section-anchor bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 mb-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="badge bg-primary-100 dark:bg-primary-950/50 text-primary-600 dark:text-primary-400">モメンタム</span>
+            <span class="text-xs text-slate-400">日本株・米国株 共通</span>
+          </div>
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-3">モメンタムスコア上位銘柄の一覧テーブル。列ヘッダークリックでソート可能。</p>
+          <div class="grid sm:grid-cols-2 gap-3 text-sm">
+            <div>
+              <p class="text-xs font-semibold text-slate-400 dark:text-gray-500 mb-2 uppercase tracking-wider">主な表示列</p>
+              <ul class="space-y-1 text-slate-600 dark:text-gray-300">
+                <li><span class="font-mono text-xs bg-slate-100 dark:bg-gray-800 px-1 rounded">スコア</span> モメンタムスコア（100点満点）</li>
+                <li><span class="font-mono text-xs bg-slate-100 dark:bg-gray-800 px-1 rounded">状態</span> 過熱 / GC / 本命 / 52W / BB圧 / NEW など</li>
+                <li><span class="font-mono text-xs bg-slate-100 dark:bg-gray-800 px-1 rounded">SQ</span> スクイーズスコア（米国株のみ）</li>
+                <li><span class="font-mono text-xs bg-slate-100 dark:bg-gray-800 px-1 rounded">1M / 3M</span> 1ヶ月・3ヶ月リターン</li>
+                <li><span class="font-mono text-xs bg-slate-100 dark:bg-gray-800 px-1 rounded">RS1M / RS3M</span> ベンチマーク対比の相対強度</li>
+              </ul>
+            </div>
+            <div>
+              <p class="text-xs font-semibold text-slate-400 dark:text-gray-500 mb-2 uppercase tracking-wider">状態バッジの意味</p>
+              <ul class="space-y-1 text-slate-600 dark:text-gray-300">
+                <li><span class="badge bg-rose-50 dark:bg-rose-900/20 text-rose-500">過熱</span> RSI &gt; 70 の過熱圏</li>
+                <li><span class="badge bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700">GC</span> ゴールデンクロス発生</li>
+                <li><span class="badge bg-primary-50 dark:bg-primary-950/30 text-primary-600">本命</span> RS 判定で最強クラス</li>
+                <li><span class="badge bg-sky-50 dark:bg-sky-900/20 text-sky-600">52W</span> 52週高値ブレイクアウト</li>
+                <li><span class="badge bg-teal-100 dark:bg-teal-900/30 text-teal-700">NEW</span> 前回から新規ランクイン</li>
+                <li><span class="badge bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700">↑+N</span> 前回比スコア急上昇</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contrarian -->
+        <div id="contrarian" class="section-anchor bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 mb-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="badge bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-300">逆張り候補</span>
+            <span class="text-xs text-slate-400">日本株・米国株 共通</span>
+          </div>
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-2">アナリスト目標株価との乖離・PER割安度・RSI売られすぎを複合して「割安な逆張り候補」を抽出。</p>
+          <ul class="text-sm text-slate-600 dark:text-gray-300 space-y-1">
+            <li>• <strong>逆張りスコア:</strong> 目標株価乖離率(40%) + 推奨(15%) + PER割安(15%) + EPS成長(15%) + RSI(15%)</li>
+            <li>• アナリスト推奨は <span class="font-mono text-xs bg-slate-100 dark:bg-gray-800 px-1 rounded">strong_buy → 強い買い</span> 形式で日本語表示</li>
+          </ul>
+        </div>
+
+        <!-- Rotation -->
+        <div id="rotation" class="section-anchor bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 mb-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="badge bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400">セクター回転</span>
+            <span class="text-xs text-slate-400">日本株・米国株 共通</span>
+          </div>
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-2">1Mリターン（縦軸）× 3Mリターン（横軸）のバブルチャートで資金の流れを4象限で可視化。</p>
+          <div class="grid grid-cols-2 gap-2 text-sm mt-3">
+            <div class="bg-emerald-50 dark:bg-emerald-950/20 rounded-lg p-3">
+              <p class="font-semibold text-emerald-700 dark:text-emerald-400">右上: 加速</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">中期も短期も強い。資金が流入中</p>
+            </div>
+            <div class="bg-sky-50 dark:bg-sky-950/20 rounded-lg p-3">
+              <p class="font-semibold text-sky-700 dark:text-sky-400">左上: 回復</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">中期弱・短期強。底打ちの兆候</p>
+            </div>
+            <div class="bg-amber-50 dark:bg-amber-950/20 rounded-lg p-3">
+              <p class="font-semibold text-amber-700 dark:text-amber-400">右下: 減速</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">中期強・短期弱。天井圏の可能性</p>
+            </div>
+            <div class="bg-rose-50 dark:bg-rose-950/20 rounded-lg p-3">
+              <p class="font-semibold text-rose-700 dark:text-rose-400">左下: 衰退</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">中期も短期も弱い。資金が流出中</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Breakout -->
+        <div id="breakout" class="section-anchor bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 mb-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="badge bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400">ブレイクアウト</span>
+            <span class="text-xs text-slate-400">日本株・米国株 共通</span>
+          </div>
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-2">52週高値に近い銘柄・ボリンジャーバンド圧縮銘柄を自動検出して専用テーブルに表示。</p>
+          <ul class="text-sm text-slate-600 dark:text-gray-300 space-y-1">
+            <li>• <strong>52W新高値:</strong> 現在値が52週高値の99%以上</li>
+            <li>• <strong>BB圧縮:</strong> ボリンジャーバンド幅が閾値以下（爆発前の収束状態）</li>
+            <li>• <strong>52W乖離:</strong> 52週高値からの距離（マイナスほど高値圏）</li>
+          </ul>
+        </div>
+
+        <!-- Quality -->
+        <div id="quality" class="section-anchor bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 mb-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="badge bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">品質マトリクス</span>
+            <span class="text-xs text-slate-400">日本株・米国株 共通</span>
+          </div>
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-2">モメンタムスコア（横軸）× 品質スコア（縦軸）の4象限チャート。右上が「高モメンタム×高品質」の理想銘柄。</p>
+          <ul class="text-sm text-slate-600 dark:text-gray-300 space-y-1">
+            <li>• <strong>品質スコア:</strong> ATR%・上下出来高比・ギャップ率・ヒゲ比率から算出</li>
+            <li>• <strong>エントリー難易度:</strong> 良好 / 押し待ち候補 / 追いかけ注意 / ボラ高注意 / 様子見 の6段階</li>
+            <li>• タブ内の「データソース健全性」でデータ取得状況を確認できる</li>
+          </ul>
+        </div>
+
+        <!-- Seed -->
+        <div id="seed" class="section-anchor bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 mb-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="badge bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400">種まき度</span>
+            <span class="badge bg-slate-100 dark:bg-gray-800 text-slate-500 text-xs">日本株専用</span>
+          </div>
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-2">機関投資家が短期業績悪化で売った「種まきフェーズ」銘柄を財務指標から検出。</p>
+          <ul class="text-sm text-slate-600 dark:text-gray-300 space-y-1">
+            <li>• <strong>タイム裁定候補:</strong> 設備投資急増(≥+20%) × 一過性赤字 × 営業CFプラス</li>
+            <li>• <strong>小型優良株:</strong> 時価総額100〜3000億円 × 高モメンタムスコア</li>
+            <li>• 種まき度スコアは設備投資・CF黒字・売上成長・利益減・株価失望の5要素から算出</li>
+          </ul>
+        </div>
+
+        <!-- US Advanced -->
+        <div id="usadvanced" class="section-anchor bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 mb-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="badge bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400">米国株分析</span>
+            <span class="badge bg-slate-100 dark:bg-gray-800 text-slate-500 text-xs">米国株専用</span>
+          </div>
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-2">4つのシグナルを加重合成した US Advanced Score（55点以上の銘柄を一覧表示）。</p>
+          <div class="overflow-x-auto mt-3">
+            <table class="w-full text-sm">
+              <thead class="text-xs text-slate-400 dark:text-gray-500">
+                <tr>
+                  <th class="text-left pb-2">シグナル</th>
+                  <th class="text-left pb-2">内容</th>
+                  <th class="text-right pb-2">ウェイト</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 dark:divide-gray-800 text-slate-600 dark:text-gray-300">
+                <tr><td class="py-2">EPS改定</td><td class="py-2">予想EPS vs 実績EPS → 上方/下方/横ばい</td><td class="py-2 text-right font-mono">30%</td></tr>
+                <tr><td class="py-2">機関投資家フロー</td><td class="py-2">機関保有比率の変化 → 買い増し/売り減らし</td><td class="py-2 text-right font-mono">30%</td></tr>
+                <tr><td class="py-2">決算後ドリフト</td><td class="py-2">決算後の価格継続性 → 上昇継続/下落継続</td><td class="py-2 text-right font-mono">25%</td></tr>
+                <tr><td class="py-2">オプションシグナル</td><td class="py-2">空売り比率をプロキシとした需給判断</td><td class="py-2 text-right font-mono">15%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Regime -->
+      <section id="regime" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">市場レジーム</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-4">騰落比率・ADL・モメンタムスコア分布・セクターローテーションを統合し、現在の相場状態を自動分類する。</p>
+          <div class="grid sm:grid-cols-2 gap-3 text-sm">
+            <div class="flex items-start gap-2"><span class="text-xl">🟢</span><div><p class="font-semibold">強気 (Bull)</p><p class="text-slate-500 dark:text-gray-400 text-xs">広範な上昇。モメンタム戦略が最も有効。</p></div></div>
+            <div class="flex items-start gap-2"><span class="text-xl">🔴</span><div><p class="font-semibold">弱気 (Bear)</p><p class="text-slate-500 dark:text-gray-400 text-xs">広範な下落。守備的な対応を推奨。</p></div></div>
+            <div class="flex items-start gap-2"><span class="text-xl">🟡</span><div><p class="font-semibold">中立 (Neutral)</p><p class="text-slate-500 dark:text-gray-400 text-xs">方向感なし。個別銘柄の選別が重要。</p></div></div>
+            <div class="flex items-start gap-2"><span class="text-xl">🔵</span><div><p class="font-semibold">分散 (Mixed)</p><p class="text-slate-500 dark:text-gray-400 text-xs">セクター間で乖離。ローテーション戦略が有効。</p></div></div>
+          </div>
+          <p class="text-xs text-slate-400 dark:text-gray-500 mt-4">「信頼度」はシグナルの一致度を示す。35%以下は判断材料として参考程度に。</p>
+        </div>
+      </section>
+
+      <!-- Daily Report -->
+      <section id="report" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">日次レポート</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 space-y-3">
+          <p class="text-sm text-slate-600 dark:text-gray-300">スクリーニング毎に自動生成。レジーム × ブレス × セクターローテーション × 変化検知を総合して候補を3分類する。</p>
+          <div class="grid sm:grid-cols-3 gap-3 text-sm">
+            <div class="bg-teal-50 dark:bg-teal-950/20 rounded-lg p-3">
+              <p class="font-semibold text-teal-700 dark:text-teal-400 mb-1">🌱 初動候補</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">新規ランクイン・52W高値圏・RS急上昇の銘柄</p>
+            </div>
+            <div class="bg-primary-50 dark:bg-primary-950/20 rounded-lg p-3">
+              <p class="font-semibold text-primary-600 dark:text-primary-400 mb-1">💪 継続強者</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">高スコアかつRS本命を継続している銘柄</p>
+            </div>
+            <div class="bg-rose-50 dark:bg-rose-950/10 rounded-lg p-3">
+              <p class="font-semibold text-rose-600 dark:text-rose-400 mb-1">⚠️ 過熱注意</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">RSI &gt; 70 または過熱シグナルが点灯している銘柄</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Notifications -->
+      <section id="notify" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">変化通知（🔔）</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-3">右上の🔔ボタンにバッジが表示されたら、前回スクリーニングからの変化がある。クリックで引き出しを開く。</p>
+          <ul class="text-sm text-slate-600 dark:text-gray-300 space-y-2">
+            <li>• <strong>新規ランクイン:</strong> 前回圏外だった銘柄が上位に入った</li>
+            <li>• <strong>圏外落下:</strong> 前回上位だった銘柄がランク外に落ちた</li>
+            <li>• <strong>スコア急上昇:</strong> 前回比 +8点以上のスコア上昇</li>
+            <li>• <strong>スコア急落:</strong> 前回比 −8点以上のスコア低下</li>
+            <li>• <strong>ウォッチリスト連動:</strong> ウォッチリスト登録銘柄の変化を優先通知</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Detail Modal -->
+      <section id="detail" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">銘柄詳細モーダル</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-3">テーブルの行をクリックすると詳細モーダルを表示。</p>
+          <div class="grid sm:grid-cols-2 gap-4 text-sm text-slate-600 dark:text-gray-300">
+            <ul class="space-y-1">
+              <li>• モメンタムスコア・品質スコア・エントリー難易度</li>
+              <li>• 種まき度スコア（日本株・スコア20以上の場合表示）</li>
+              <li>• 資本配分スコア（ROE・ROIC・配当性向・自社株買い）</li>
+              <li>• AI自動解説（タグ・投資チェック質問）</li>
+            </ul>
+            <ul class="space-y-1">
+              <li>• テクニカル指標（RSI・MACD・BB・52W高安値）</li>
+              <li>• ファンダメンタルズ（PER・PBR・EPS・配当利回り）</li>
+              <li>• ショートスクイーズ分析（米国株のみ）</li>
+              <li>• スコア内訳グラフ（各指標の貢献度）</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- CF Analysis -->
+      <section id="cf" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">CF分析（日本株専用）</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-3">テーブルの「CF」ボタン、またはモーダルから起動。EDINET DB APIと J-Quants APIを利用。</p>
+          <div class="grid sm:grid-cols-2 gap-4 text-sm text-slate-600 dark:text-gray-300">
+            <div>
+              <p class="font-semibold text-slate-700 dark:text-gray-200 mb-2">年次CF（EDINET）</p>
+              <ul class="space-y-1">
+                <li>• 最大14年の年次CF推移</li>
+                <li>• 営業CF / 投資CF / 財務CF / FCF</li>
+                <li>• M&A余力試算（ネットキャッシュ + FCF × 年数）</li>
+              </ul>
+            </div>
+            <div>
+              <p class="font-semibold text-slate-700 dark:text-gray-200 mb-2">四半期CF（J-Quants）</p>
+              <ul class="space-y-1">
+                <li>• 四半期単体の営業CF推移</li>
+                <li>• J-Quants APIキーが必要（無料プラン対応）</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Backtest -->
+      <section id="backtest" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">バックテスト</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-3">「履歴」→ セッションを選択 → 「バックテスト実行」で過去データのシミュレーションが可能。</p>
+          <ul class="text-sm text-slate-600 dark:text-gray-300 space-y-1">
+            <li>• 対象期間・上位N銘柄・等加重ポートフォリオを指定して実行</li>
+            <li>• 総リターン・年率リターン・最大ドローダウン・シャープ比を算出</li>
+            <li>• ベンチマーク（SPY / ^N225）との比較エクイティカーブを表示</li>
+            <li>• 結果はDBに保存され、再実行なしで確認可能</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Watchlist -->
+      <section id="watchlist" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">ウォッチリスト</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
+          <ul class="text-sm text-slate-600 dark:text-gray-300 space-y-2">
+            <li>• 各行の「☆」をクリックで登録 / 「★」で解除</li>
+            <li>• 「★ ウォッチリスト」ボタンでウォッチリスト銘柄のみにフィルタ</li>
+            <li>• ウォッチリスト登録銘柄の変化は🔔で優先通知される</li>
+            <li>• インデックスをまたいで登録可能（日経225と米国株を同時管理）</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- History -->
+      <section id="history" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">履歴</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
+          <ul class="text-sm text-slate-600 dark:text-gray-300 space-y-2">
+            <li>• 「履歴」ボタンで過去のスクリーニングセッション一覧を表示</li>
+            <li>• セッションをクリックするとその時点のランキングを復元</li>
+            <li>• 選択したセッションからバックテストを実行可能</li>
+            <li>• 結果はサーバー再起動後も保持される（SQLite永続化）</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Customize -->
+      <section id="customize" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">カスタマイズ</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 space-y-4">
+          <div>
+            <p class="font-semibold text-sm mb-1">テーマカラー</p>
+            <p class="text-sm text-slate-500 dark:text-gray-400">右上のカラーピッカーで任意の色を選択。HSLベースでWCAG AA準拠の配色が自動生成される。設定はブラウザに保存される。</p>
+          </div>
+          <div>
+            <p class="font-semibold text-sm mb-1">ダークモード</p>
+            <p class="text-sm text-slate-500 dark:text-gray-400">右上の ☀/☾ ボタンで切替。設定はブラウザに保存される。</p>
+          </div>
+          <div>
+            <p class="font-semibold text-sm mb-1">ウェイトプリセット</p>
+            <p class="text-sm text-slate-500 dark:text-gray-400">スクリーニング結果画面で「バランス型 / 出来高重視 / トレンド重視 / 初動特化 / リバーサル」から選択。再スクリーニング不要で即座に再ランク付け。</p>
+          </div>
+          <div>
+            <p class="font-semibold text-sm mb-1">表示銘柄数</p>
+            <p class="text-sm text-slate-500 dark:text-gray-400">上位 10 / 20 / 30 / 50 銘柄から選択可能。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- RS -->
+      <section id="rs" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">相対強度 (RS) 判定</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800">
+            <thead class="bg-slate-50 dark:bg-gray-800/50 text-xs text-slate-500">
+              <tr>
+                <th class="px-4 py-3 text-left">ラベル</th>
+                <th class="px-4 py-3 text-left">条件</th>
+                <th class="px-4 py-3 text-left">意味</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-gray-800">
+              <tr>
+                <td class="px-4 py-3"><span class="badge bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400">本命</span></td>
+                <td class="px-4 py-3 font-mono text-xs">RS1M &gt; +2% かつ RS3M &gt; 0</td>
+                <td class="px-4 py-3 text-slate-500 dark:text-gray-400">短期も中期もベンチマーク超え</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3"><span class="badge bg-amber-50 dark:bg-amber-900/20 text-amber-600">短期</span></td>
+                <td class="px-4 py-3 font-mono text-xs">RS1M &gt; +2% かつ RS3M ≤ 0</td>
+                <td class="px-4 py-3 text-slate-500 dark:text-gray-400">短期は強いが中期は平凡</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3"><span class="badge bg-slate-100 dark:bg-gray-800 text-slate-500">劣後</span></td>
+                <td class="px-4 py-3 font-mono text-xs">RS1M ≤ +2%</td>
+                <td class="px-4 py-3 text-slate-500 dark:text-gray-400">ベンチマーク比で上位にない</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3"><span class="badge bg-violet-50 dark:bg-violet-900/20 text-violet-500">テーマ</span></td>
+                <td class="px-4 py-3 font-mono text-xs">BTC連動など</td>
+                <td class="px-4 py-3 text-slate-500 dark:text-gray-400">セクター比較が不適切な銘柄</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-xs text-slate-400 dark:text-gray-500 mt-3">米国株: セクターETF（XLK, XLV, XLF 等11本）比較 / 日本株: 日経平均（^N225）比較</p>
+      </section>
+
+      <!-- Disclaimer -->
+      <section id="disclaimer" class="section-anchor">
+        <div class="bg-slate-100 dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
+          <p class="text-sm font-semibold mb-2 text-slate-700 dark:text-gray-200">免責事項</p>
+          <p class="text-xs text-slate-500 dark:text-gray-400">本ツールは教育・研究目的で作成されています。データはYahoo Finance・EDINET DB・J-Quantsから取得しており、正確性を保証するものではありません。投資判断は自己責任でお願いします。</p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    // Apply stored color
+    (function(){
+      const hex = localStorage.getItem('theme-color') || '#06b6d4';
+      const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+      const max = Math.max(r,g,b)/255, min = Math.min(r,g,b)/255;
+      const l = (max+min)/2;
+      const d = max-min;
+      const s = d === 0 ? 0 : d/(1-Math.abs(2*l-1));
+      let h = 0;
+      if(d!==0){if(max===r/255)h=((g/255-b/255)/d)%6;else if(max===g/255)h=(b/255-r/255)/d+2;else h=(r/255-g/255)/d+4;h=Math.round(h*60);if(h<0)h+=360;}
+      document.documentElement.style.setProperty('--hue', h);
+    })();
+
+    function toggleDark() {
+      document.documentElement.classList.toggle('dark');
+      const isDark = document.documentElement.classList.contains('dark');
+      localStorage.setItem('dark-mode', isDark);
+      document.getElementById('darkToggle').textContent = isDark ? '☀' : '☾';
+    }
+
+    // Set correct icon on load
+    document.addEventListener('DOMContentLoaded', () => {
+      const isDark = document.documentElement.classList.contains('dark');
+      document.getElementById('darkToggle').textContent = isDark ? '☀' : '☾';
+    });
+  </script>
+
+</body>
+</html>

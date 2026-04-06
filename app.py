@@ -255,6 +255,11 @@ def us():
     return render_template("us.html")
 
 
+@app.route("/howto")
+def howto():
+    return render_template("howto.html")
+
+
 @app.post("/api/screen")
 def start_screening():
     with _lock:
