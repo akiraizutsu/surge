@@ -476,29 +476,44 @@ def screen_momentum(tickers, sectors, progress_cb=None, is_japan=False):
             dist_from_low = round((current_price / low_52w - 1) * 100, 2) if low_52w > 0 else 0
             is_breakout = current_price >= high_52w * 0.99  # within 1% of 52W high
 
-            # 9 EMA trend (compliance score)
-            ema9_series  = close.ewm(span=9,  adjust=False).mean() if len(close) >= 9  else None
-            ema21_series = close.ewm(span=21, adjust=False).mean() if len(close) >= 21 else None
-            ema9_val  = float(ema9_series.iloc[-1])  if ema9_series  is not None else current_price
-            ema21_val = float(ema21_series.iloc[-1]) if ema21_series is not None else current_price
-            ema9_prev = float(ema9_series.iloc[-2])  if (ema9_series is not None and len(ema9_series) >= 2) else ema9_val
+            # Weekly 9 EMA trend (compliance score)
+            # Resample daily close to weekly (last trading day of each week)
+            try:
+                weekly_close = close.resample('W').last().dropna()
+            except Exception:
+                weekly_close = pd.Series([], dtype=float)
+            w_len = len(weekly_close)
+
+            w_ema9_series  = weekly_close.ewm(span=9,  adjust=False).mean() if w_len >= 9  else None
+            w_ema21_series = weekly_close.ewm(span=21, adjust=False).mean() if w_len >= 21 else None
+            w_ema50_series = weekly_close.ewm(span=50, adjust=False).mean() if w_len >= 50 else None
+
+            ema9_val  = float(w_ema9_series.iloc[-1])  if w_ema9_series  is not None else current_price
+            ema21_val = float(w_ema21_series.iloc[-1]) if w_ema21_series is not None else current_price
+            ema50_val = float(w_ema50_series.iloc[-1]) if w_ema50_series is not None else ma_50
+            ema9_prev = float(w_ema9_series.iloc[-2])  if (w_ema9_series is not None and w_len >= 2) else ema9_val
             ema9_slope_up = ema9_val > ema9_prev
-            # Count consecutive days above 9 EMA (up to last 10 days)
+
+            # Consecutive weeks above weekly 9 EMA (up to last 10 weeks)
+            # days_above_ema9 field name kept for DB compat; value now counts weeks
             days_above_ema9 = 0
-            if ema9_series is not None:
-                for _i in range(1, min(11, len(close))):
-                    if float(close.iloc[-_i]) > float(ema9_series.iloc[-_i]):
+            if w_ema9_series is not None:
+                for _i in range(1, min(11, w_len)):
+                    if float(weekly_close.iloc[-_i]) > float(w_ema9_series.iloc[-_i]):
                         days_above_ema9 += 1
                     else:
                         break
             ema9_pct = round((current_price / ema9_val - 1) * 100, 2) if ema9_val > 0 else 0
-            # EMA stack: 9 > 21 > 50 (full bullish alignment)
-            ema_stack = bool(ema9_val > ema21_val > ma_50)
+            # EMA stack: weekly 9 > 21 > 50 (full bullish alignment)
+            if w_ema21_series is not None and w_ema50_series is not None:
+                ema_stack = bool(ema9_val > ema21_val > ema50_val)
+            else:
+                ema_stack = bool(ema9_val > ema21_val > ma_50)
             # Compliance score: 0-5
             _ema9_score = 0
             if current_price > ema9_val and ema9_slope_up: _ema9_score += 2
             if ema_stack:                                   _ema9_score += 2
-            if days_above_ema9 >= 5:                        _ema9_score += 1
+            if days_above_ema9 >= 2:                        _ema9_score += 1  # ≥2 weeks
             ema9_compliant  = _ema9_score >= 4   # 準拠中
             ema9_broken     = current_price < ema9_val  # 割れ
 

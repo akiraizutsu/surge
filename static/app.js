@@ -808,8 +808,8 @@ function renderTable(ranking) {
     if (t.is_breakout) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 font-medium">52W</span>';
     if (t.bb_squeeze) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-orange-50 dark:bg-orange-900/20 text-orange-500 dark:text-orange-400 font-medium">BB圧</span>';
     if (!isJapanIndex()) {
-      if (t.ema9_compliant) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-medium">9EMA↑</span>';
-      else if (t.ema9_broken) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300 font-medium">9EMA割れ</span>';
+      if (t.ema9_compliant) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-medium">W9EMA↑</span>';
+      else if (t.ema9_broken) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300 font-medium">W9EMA割れ</span>';
     }
     const f = r.fundamentals;
     if (f && f.days_to_earnings != null && f.days_to_earnings >= 0 && f.days_to_earnings <= 14) {
@@ -1410,14 +1410,14 @@ async function showDetail(stock) {
     </div>
 
     ${!isJapanIndex() && t.ema9 != null ? `
-    <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">9EMAトレンド準拠</h3>
+    <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">週足9EMAトレンド準拠</h3>
     <div class="mb-6 bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-4">
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-2">
           ${t.ema9_compliant
-            ? '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-sm font-semibold">✓ 9EMA準拠中</span>'
+            ? '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-sm font-semibold">✓ W9EMA準拠中</span>'
             : t.ema9_broken
-              ? '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300 text-sm font-semibold">✗ 9EMA割れ</span>'
+              ? '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300 text-sm font-semibold">✗ W9EMA割れ</span>'
               : '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-gray-800 text-slate-500 text-sm font-semibold">― 中立</span>'
           }
         </div>
@@ -1428,7 +1428,7 @@ async function showDetail(stock) {
       </div>
       <div class="grid grid-cols-4 gap-2 text-xs">
         <div class="text-center bg-slate-50 dark:bg-gray-800 rounded-lg p-2">
-          <div class="text-slate-400 dark:text-gray-500">9EMA値</div>
+          <div class="text-slate-400 dark:text-gray-500">W9EMA値</div>
           <div class="font-semibold mt-0.5">${t.ema9 ? formatPrice(t.ema9) : '-'}</div>
         </div>
         <div class="text-center bg-slate-50 dark:bg-gray-800 rounded-lg p-2">
@@ -1436,8 +1436,8 @@ async function showDetail(stock) {
           <div class="font-semibold mt-0.5 ${t.ema9_pct > 0 ? 'text-emerald-500' : 'text-rose-400'}">${t.ema9_pct != null ? (t.ema9_pct > 0 ? '+' : '') + t.ema9_pct + '%' : '-'}</div>
         </div>
         <div class="text-center bg-slate-50 dark:bg-gray-800 rounded-lg p-2">
-          <div class="text-slate-400 dark:text-gray-500">連続日数</div>
-          <div class="font-semibold mt-0.5">${t.days_above_ema9 != null ? t.days_above_ema9 + '日' : '-'}</div>
+          <div class="text-slate-400 dark:text-gray-500">連続週数</div>
+          <div class="font-semibold mt-0.5">${t.days_above_ema9 != null ? t.days_above_ema9 + '週' : '-'}</div>
         </div>
         <div class="text-center bg-slate-50 dark:bg-gray-800 rounded-lg p-2">
           <div class="text-slate-400 dark:text-gray-500">EMAスタック</div>
@@ -1445,8 +1445,8 @@ async function showDetail(stock) {
         </div>
       </div>
       <div class="mt-3 text-[10px] text-slate-400 dark:text-gray-500 space-y-0.5">
-        <div>スコア内訳: 価格 &gt; 9EMA かつ上向き(+2) ／ EMAスタック 9&gt;21&gt;50(+2) ／ 5日以上連続(+1)</div>
-        <div>EMAスタック: 9EMA ${t.ema_stack ? '>' : '≤'} 21EMA ${t.ema_stack ? '>' : '≤'} 50MA</div>
+        <div>スコア内訳: 終値 &gt; 週足W9EMA かつ上向き(+2) ／ 週足EMAスタック W9&gt;W21&gt;W50(+2) ／ 2週以上連続上抜け(+1)</div>
+        <div>EMAスタック(週足): W9EMA ${t.ema_stack ? '>' : '≤'} W21EMA ${t.ema_stack ? '>' : '≤'} W50EMA</div>
       </div>
     </div>` : ''}
 
