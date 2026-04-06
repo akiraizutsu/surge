@@ -476,6 +476,32 @@ def screen_momentum(tickers, sectors, progress_cb=None, is_japan=False):
             dist_from_low = round((current_price / low_52w - 1) * 100, 2) if low_52w > 0 else 0
             is_breakout = current_price >= high_52w * 0.99  # within 1% of 52W high
 
+            # 9 EMA trend (compliance score)
+            ema9_series  = close.ewm(span=9,  adjust=False).mean() if len(close) >= 9  else None
+            ema21_series = close.ewm(span=21, adjust=False).mean() if len(close) >= 21 else None
+            ema9_val  = float(ema9_series.iloc[-1])  if ema9_series  is not None else current_price
+            ema21_val = float(ema21_series.iloc[-1]) if ema21_series is not None else current_price
+            ema9_prev = float(ema9_series.iloc[-2])  if (ema9_series is not None and len(ema9_series) >= 2) else ema9_val
+            ema9_slope_up = ema9_val > ema9_prev
+            # Count consecutive days above 9 EMA (up to last 10 days)
+            days_above_ema9 = 0
+            if ema9_series is not None:
+                for _i in range(1, min(11, len(close))):
+                    if float(close.iloc[-_i]) > float(ema9_series.iloc[-_i]):
+                        days_above_ema9 += 1
+                    else:
+                        break
+            ema9_pct = round((current_price / ema9_val - 1) * 100, 2) if ema9_val > 0 else 0
+            # EMA stack: 9 > 21 > 50 (full bullish alignment)
+            ema_stack = bool(ema9_val > ema21_val > ma_50)
+            # Compliance score: 0-5
+            _ema9_score = 0
+            if current_price > ema9_val and ema9_slope_up: _ema9_score += 2
+            if ema_stack:                                   _ema9_score += 2
+            if days_above_ema9 >= 5:                        _ema9_score += 1
+            ema9_compliant  = _ema9_score >= 4   # 準拠中
+            ema9_broken     = current_price < ema9_val  # 割れ
+
             # Bollinger Band width (squeeze detection)
             sma_20 = close.iloc[-20:].mean() if len(close) >= 20 else current_price
             std_20 = close.iloc[-20:].std() if len(close) >= 20 else 0
@@ -542,6 +568,14 @@ def screen_momentum(tickers, sectors, progress_cb=None, is_japan=False):
                 "is_breakout": is_breakout,
                 "bb_width": bb_width,
                 "bb_squeeze": bb_squeeze,
+                "ema9": round(ema9_val, 2),
+                "ema9_pct": ema9_pct,
+                "ema9_slope_up": ema9_slope_up,
+                "ema9_compliant": ema9_compliant,
+                "ema9_broken": ema9_broken,
+                "ema_stack": ema_stack,
+                "days_above_ema9": days_above_ema9,
+                "ema9_score": _ema9_score,
                 # Sprint 3 quality (earnings_days not yet available here)
                 "_quality_components": _quality["quality_components"],
                 "_quality_base_score": _quality["quality_score"],
@@ -1465,6 +1499,14 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
                 "bb_squeeze": bool(row.get("bb_squeeze", False)),
                 "golden_cross": row["golden_cross"],
                 "overheat": bool(row["overheat"]),
+                "ema9": row.get("ema9"),
+                "ema9_pct": row.get("ema9_pct"),
+                "ema9_slope_up": bool(row.get("ema9_slope_up", False)),
+                "ema9_compliant": bool(row.get("ema9_compliant", False)),
+                "ema9_broken": bool(row.get("ema9_broken", False)),
+                "ema_stack": bool(row.get("ema_stack", False)),
+                "days_above_ema9": row.get("days_above_ema9", 0),
+                "ema9_score": row.get("ema9_score", 0),
             },
             "fundamentals": {
                 "market_cap_b": fund.get("market_cap_b"),
