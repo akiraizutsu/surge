@@ -91,6 +91,7 @@ _state = {
     "error": None,
 }
 _lock = threading.Lock()
+_screening_thread = None  # Track the screening thread
 
 
 def _progress_callback(message, pct):
@@ -115,6 +116,8 @@ def _run_screening_job(index, top_n):
         _state["error"] = None
         _state["progress_pct"] = 0
         _state["progress_message"] = "Starting..."
+        _state["last_index"] = index
+        _state["last_top_n"] = top_n
 
     try:
         if index == "all":
@@ -262,7 +265,12 @@ def howto():
 
 @app.post("/api/screen")
 def start_screening():
+    global _screening_thread
     with _lock:
+        # If state says running but thread is dead, reset the stale state
+        if _state["running"] and (_screening_thread is None or not _screening_thread.is_alive()):
+            _state["running"] = False
+            _state["error"] = "前回のスクリーニングが異常終了しました。再実行してください。"
         if _state["running"]:
             return jsonify({"error": "Screening already in progress"}), 409
 
@@ -275,8 +283,8 @@ def start_screening():
     if not (1 <= top_n <= 100):
         return jsonify({"error": "top_n must be between 1 and 100"}), 400
 
-    thread = threading.Thread(target=_run_screening_job, args=(index, top_n), daemon=True)
-    thread.start()
+    _screening_thread = threading.Thread(target=_run_screening_job, args=(index, top_n), daemon=True)
+    _screening_thread.start()
 
     return jsonify({"status": "started", "index": index, "top_n": top_n})
 
@@ -290,13 +298,27 @@ def get_status():
         db_results = get_latest_sessions_by_index()
         has_result = bool(db_results)
     with _lock:
-        return jsonify({
+        resp = {
             "running": _state["running"],
             "progress_message": _state["progress_message"],
             "progress_pct": _state["progress_pct"],
             "error": _state["error"],
             "has_result": has_result,
-        })
+        }
+        if _state["error"]:
+            resp["last_index"] = _state.get("last_index")
+            resp["last_top_n"] = _state.get("last_top_n")
+        return jsonify(resp)
+
+
+@app.post("/api/clear_error")
+def api_clear_error():
+    with _lock:
+        _state["running"] = False
+        _state["error"] = None
+        _state["progress_message"] = ""
+        _state["progress_pct"] = 0
+    return jsonify({"status": "cleared"})
 
 
 @app.get("/api/result")
