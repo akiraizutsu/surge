@@ -867,15 +867,20 @@ function renderTable(ranking) {
 
     const starred = watchlistTickers.has(r.ticker);
     const cfBtn = isJapanIndex()
-      ? `<button onclick="showCfModal('${r.ticker}',event)" class="text-[9px] font-bold px-1 py-0.5 rounded bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-colors leading-none cursor-pointer">CF</button>`
+      ? `<button onclick="showCfModal('${r.ticker}',event)" class="w-7 h-7 flex items-center justify-center rounded-md bg-primary-500/10 hover:bg-primary-500/20 text-primary-500 dark:text-primary-400 text-[10px] font-bold transition-colors cursor-pointer shrink-0">CF</button>`
       : '';
     const compareChecked = comparisonTickers.includes(r.ticker);
+    const cmpCls = compareChecked
+      ? 'bg-primary-500 border-primary-500 text-white'
+      : 'bg-transparent border-slate-300 dark:border-gray-600 text-transparent hover:border-primary-400';
     const starCell = `<td class="px-1.5 sm:px-2 py-2 sm:py-3">
-      <div class="flex items-center gap-1.5">
-        <input type="checkbox" ${compareChecked ? 'checked' : ''} onclick="toggleCompare('${r.ticker}', event)"
-          class="w-3.5 h-3.5 rounded border-slate-300 dark:border-gray-600 accent-primary-500 cursor-pointer shrink-0" title="比較に追加">
+      <div class="flex items-center gap-2.5">
+        <button onclick="toggleCompare('${r.ticker}', event)"
+          class="w-5 h-5 rounded-[5px] border-[1.5px] flex items-center justify-center text-[11px] leading-none transition-all cursor-pointer shrink-0 ${cmpCls}" title="比較に追加">
+          ${compareChecked ? '&#10003;' : '&#10003;'}
+        </button>
         <button onclick="toggleStar('${r.ticker}', event)"
-          class="text-base leading-none cursor-pointer hover:scale-110 transition-transform shrink-0 ${starred ? 'text-amber-400' : 'text-slate-300 dark:text-gray-600'}"
+          class="text-lg leading-none cursor-pointer hover:scale-110 transition-transform shrink-0 ${starred ? 'text-amber-400' : 'text-slate-300 dark:text-gray-600 hover:text-amber-300'}"
           aria-label="${starred ? 'ウォッチリストから削除' : 'ウォッチリストに追加'}">
           ${starred ? '&#9733;' : '&#9734;'}
         </button>
