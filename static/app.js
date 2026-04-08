@@ -147,6 +147,24 @@ async function runScreening() {
 
     if (!resp.ok) {
       const err = await resp.json();
+      // If 409 (already running), try to clear stale state and retry once
+      if (resp.status === 409) {
+        await fetch('/api/clear_error', { method: 'POST' });
+        const retry = await fetch('/api/screen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            index: window.IS_JAPAN_PAGE ? 'japan_all' : 'us_all',
+            top_n: parseInt(document.getElementById('topN').value),
+          }),
+        });
+        if (retry.ok) {
+          pollProgress();
+          return;
+        }
+        const retryErr = await retry.json();
+        throw new Error(retryErr.error || 'スクリーニングの開始に失敗しました');
+      }
       throw new Error(err.error || 'スクリーニングの開始に失敗しました');
     }
 
