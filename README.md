@@ -1,75 +1,69 @@
-# Surge v2
+<p align="center">
+  <img src="static/favicon.svg" width="64" alt="Surge logo" />
+</p>
 
-日本株（日経225・グロース250）と米国株（S&P 500・NASDAQ 100）のモメンタムスクリーニングダッシュボード。
+<h1 align="center">Surge v2</h1>
 
-騰落率・出来高・MA乖離・MACD・RSI を複合スコアリングし、勢いのある銘柄を自動抽出。市場レジーム分類・変化検知・日次レポート・バックテストなど7スプリントにわたる高度な分析機能を搭載。
+<p align="center">
+  <strong>4市場 × 30+指標のモメンタムスクリーニングダッシュボード</strong><br/>
+  日経225 / グロース250 / S&P 500 / NASDAQ 100
+</p>
 
-![Python](https://img.shields.io/badge/Python-3.12-3776ab?logo=python&logoColor=white)
-![Flask](https://img.shields.io/badge/Flask-3.0-000000?logo=flask)
-![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green)
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.12-3776ab?logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/Flask-3.0-000000?logo=flask" />
+  <img src="https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white" />
+  <img src="https://img.shields.io/badge/Chart.js-4-FF6384?logo=chartdotjs&logoColor=white" />
+  <img src="https://img.shields.io/badge/Deploy-Railway-0B0D0E?logo=railway" />
+  <img src="https://img.shields.io/badge/License-MIT-green" />
+</p>
+
+---
+
+## What is Surge?
+
+Surge は **「今、勢いのある銘柄」を定量的に見つける** ためのダッシュボードです。
+
+1. ボタン1つで 225〜503 銘柄を一括スクリーニング
+2. 騰落率・出来高・MACD・RSI・OBV など **30以上のテクニカル指標** を自動計算
+3. 6指標を加重平均した **モメンタムスコア（100点満点）** でランキング
+4. 市場レジーム・セクターローテーション・相関マトリクスで **相場全体の温度感** を把握
+5. ウォッチリスト・変化検知・ブラウザ通知で **見逃さない**
+
+---
+
+## Highlights
+
+| 機能 | 概要 |
+|------|------|
+| **複合モメンタムスコア** | 6指標パーセンタイルランクの加重平均。5つのウェイトプリセットで即座に切替 |
+| **市場レジーム自動判定** | 騰落比率・ADL・スコア分布・セクターローテーションから7段階に分類 |
+| **セクターローテーション** | 1M×3Mリターンのバブルチャートで資金の流れを4象限に可視化 |
+| **セクター相関マトリクス** | 60日リターンに基づくヒートマップ。分散投資の判断材料 |
+| **逆張り候補 (Value Gap)** | アナリスト目標株価乖離 × ファンダメンタルズで割安銘柄を検出 |
+| **52週ブレイクアウト** | 新高値・BB圧縮銘柄を専用タブで一覧表示 |
+| **OBV (On-Balance Volume)** | 出来高累積トレンド + 価格との乖離検出（強気/弱気ダイバージェンス） |
+| **ドローダウン分析** | 3ヶ月最大DD・現在DDをモーダルに表示。リスク把握に |
+| **銘柄比較モード** | チェックボックスで2〜3銘柄を選択 → 18指標を並べて比較 |
+| **変化検知 & 通知** | 新規ランクイン・スコア急変をリアルタイム検出。ブラウザ通知対応 |
+| **日次レポート** | レジーム×ブレス×ローテーション×変化検知から「初動/継続/注意」候補を自動生成 |
+| **バックテスト** | 上位銘柄等加重ポートフォリオの勝率・シャープ比・vsベンチマークを算出 |
+| **日本株専用分析** | CF分析（EDINET）・種まき度・資本配分・タイム裁定・小型優良株 |
+| **米国株専用分析** | EPS改定・機関フロー・決算後ドリフト・ショートスクイーズ・週足9EMA |
+| **スクリーニングETA** | 残り時間をリアルタイム推定表示 |
+| **エラーリカバリー** | 失敗時に再試行ボタンを表示。stale状態も自動回復 |
+| **データ品質管理** | ソース健全性・カバレッジ・異常値検出を品質マトリクスタブで確認 |
+
+---
 
 ## ページ構成
 
-| URL | 対象市場 |
-|-----|---------|
-| `/` | 日経225 / グロース250 |
-| `/us` | S&P 500 / NASDAQ 100 |
-
-## 機能一覧（Sprint 1〜7）
-
-### Sprint 1: コアスクリーニング
-
-- **複合モメンタムスコア** — 6指標のパーセンタイルランクを加重平均（100点満点）
-- **逆張り候補 (Value Gap)** — アナリスト目標株価との乖離 × ファンダメンタルズで割安銘柄を検出
-- **相対強度 (RS)** — セクターETF / ベンチマーク比較で「本命 / 短期 / 劣後 / テーマ」を自動判定
-- **タグ付け** — 過熱・ゴールデンクロス・RS本命・スクイーズ候補などをバッジ表示
-
-### Sprint 2: 市場レジーム分類
-
-- **マーケットレジーム** — 市場全体の状態を「強気 / 弱気 / 中立 / 分散」に自動分類
-- **騰落線 (ADL)** — 市場ブレス分析で相場全体の健全性を時系列チャートで可視化
-- **スコアリングプリセット** — 「モメンタム重視 / バランス / 安定重視」の3プリセットを切替可能
-
-### Sprint 3: セクターローテーション・52週ブレイクアウト・決算スケジュール
-
-- **セクターローテーション** — 1M/3Mリターンのバブルチャートで資金の流れを4象限で可視化
-- **52週ブレイクアウト** — 新高値・ボリンジャーバンド圧縮銘柄を自動検出し専用タブに一覧表示
-- **決算スケジュール** — 決算まであと何日かをテーブルに表示（7日以内は強調）
-
-### Sprint 4: バックテスト
-
-- **バックテスト** — モメンタムスコア上位銘柄の等加重ポートフォリオを任意期間でシミュレーション
-- **勝率・最大ドローダウン・シャープ比・vs ベンチマーク** を自動算出
-- **エクイティカーブ** — 資産推移をChart.jsで描画
-
-### Sprint 5: 日本株高度化（種まき度・資本配分・タイム裁定・小型優良株）
-
-- **タイム裁定候補** — 設備投資急増（≥+20%）× 一過性赤字 × 営業CFプラスの種まき銘柄を抽出
-- **小型優良株** — 時価総額100〜3000億円帯でモメンタムスコアが高い銘柄を抽出
-- **種まき度スコア** — 過少評価フェーズにある銘柄を財務指標から0〜100点でスコアリング
-- **資本配分スコア** — ROE・ROIC・自社株買い・配当性向を加重平均した株主還元力の評価
-- **品質マトリクス** — モメンタム × 品質の4象限チャートでエントリー難易度を可視化
-
-### Sprint 6: 変化検知・通知・日次レポート
-
-- **変化検知** — スクリーニング毎に「新規ランクイン / 圏外落下 / スコア急上昇 / スコア急落」を自動検出
-- **🔔 通知センター** — 変化イベントをリアルタイムでバッジ表示、引き出しパネルで確認
-- **日次レポート** — レジーム × ブレス × セクターローテーション × 変化検知から候補3分類（初動 / 継続 / 注意）を自動生成
-
-### Sprint 7: 米国株高度化
-
-- **EPS改定シグナル** — 予想EPS vs 実績EPSの比較から上方修正 / 下方修正 / 横ばいを判定
-- **機関投資家フロー** — 機関保有比率の変化から買い増し / 売り減らしを推定
-- **決算後ドリフト** — 決算後の価格継続性から上昇継続 / 下落継続 / 中立を判定
-- **オプションシグナル** — 空売り比率をプロキシとしたコール優勢 / プット優勢推定
-- **US Advanced Score** — 4シグナルの加重合成スコア（55点以上を専用タブに一覧表示）
-
-### データ品質管理
-
-- **データソース健全性** — Wikipedia / yfinance / EDINET / J-Quants の最終取得時刻・ステータスを品質マトリクスタブで確認
-- **ランキング品質スコア** — 欠損フィールド・異常値（RSI範囲外・株価ゼロ等）の検出と品質スコア（0〜100%）の算出
-- **カバレッジ統計** — 全銘柄数に対するスクリーニング完了率・ファンダメンタルズ取得率を表示
+| URL | 対象市場 | 専用機能 |
+|-----|---------|---------|
+| `/` | 日経225 / グロース250 | CF分析・種まき度・資本配分・タイム裁定・小型優良株 |
+| `/us` | S&P 500 / NASDAQ 100 | ショートスクイーズ・EPS改定・機関フロー・決算後ドリフト・W9EMA |
+| `/howto` | — | 使い方ガイド（全機能の解説） |
 
 ---
 
@@ -77,7 +71,7 @@
 
 ### モメンタムスコア（100点満点）
 
-| 指標 | ウェイト |
+| 指標 | デフォルトウェイト |
 |------|----------|
 | 1ヶ月リターン | 20% |
 | 3ヶ月リターン | 20% |
@@ -86,40 +80,25 @@
 | MACDヒストグラム | 15% |
 | RSI | 15% |
 
-### 逆張りスコア (Value Gap)
+**5つのプリセット**: バランス型 / 出来高重視 / トレンド重視 / 初動特化 / リバーサル
 
-| 指標 | ウェイト |
-|------|----------|
-| 目標株価乖離率 | 40% |
-| アナリスト推奨 | 15% |
-| PER (予想) 割安度 | 15% |
-| EPS成長率 | 15% |
-| RSI売られすぎ | 15% |
+### その他のスコア
 
-### スクイーズスコア（米国株のみ）
-
-| 指標 | ウェイト |
-|------|----------|
-| 空売り比率 (% of Float) | 40% |
-| Days to Cover | 30% |
-| 空売り前月比変化 | 15% |
-| モメンタムスコア | 15% |
-
-### US Advanced Score（米国株のみ）
-
-| シグナル | ウェイト |
-|---------|----------|
-| EPS改定 | 30% |
-| 機関投資家フロー | 30% |
-| 決算後ドリフト | 25% |
-| オプションシグナル | 15% |
+| スコア | 概要 |
+|--------|------|
+| **逆張りスコア** | 目標株価乖離(40%) + 推奨(15%) + PER割安(15%) + EPS成長(15%) + RSI(15%) |
+| **スクイーズスコア** | 空売り比率(40%) + DTC(30%) + 前月比変化(15%) + モメンタム(15%) |
+| **US Advanced Score** | EPS改定(30%) + 機関フロー(30%) + 決算後ドリフト(25%) + オプション(15%) |
+| **種まき度スコア** | 設備投資急増 × CF黒字 × 売上成長 × 利益減 × 株価失望 |
+| **資本配分スコア** | 営業CF安定性 / 設備投資一貫性 / FCF品質 / 株主還元 / M&A余力 |
+| **品質スコア** | ATR% / 上下出来高比 / ギャップ率 / ヒゲ比率 |
 
 ### 相対強度 (RS) 判定
 
 | ラベル | 条件 | 意味 |
 |--------|------|------|
 | 本命 | RS1M > +2% かつ RS3M > 0 | 短期も中期もセクター比で強い |
-| 短期 | RS1M > +2% かつ RS3M ≤ 0 | 短期は強いが中期は弱い |
+| 短期 | RS1M > +2% かつ RS3M ≤ 0 | 短期のみ強い |
 | 劣後 | RS1M ≤ +2% | セクター比で上位にいない |
 | テーマ | BTC連動銘柄等 | セクター比較が不適切 |
 
@@ -128,13 +107,14 @@
 ## セットアップ
 
 ```bash
-git clone https://github.com/akiraizutsu/surge.git
-cd surge
+git clone https://github.com/akiraizutsu/Surge.git
+cd Surge
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python app.py
 ```
 
-ブラウザで `http://localhost:5001` を開き、パスワードでログイン後「スクリーニング実行」をクリック。
+ブラウザで `http://localhost:5001` を開き、「スクリーニング実行」をクリック。
 
 ### 環境変数
 
@@ -142,24 +122,107 @@ python app.py
 |--------|------|-----------|
 | `PORT` | サーバーポート | `5001` |
 | `SURGE_PASSWORD` | ログインパスワード（未設定時は認証スキップ） | — |
-| `SECRET_KEY` | Flaskセッション署名キー（本番では必ず設定） | フォールバック値 |
-| `EDINETDB_API_KEY` | EDINET DB APIキー（日本株CF・財務データ取得） | — |
-| `JQUANTS_API_KEY` | J-Quants APIキー（四半期CF取得、無料プラン対応） | — |
-
-`.env` ファイルに記載するか、Railwayの Variables に設定してください。
+| `SECRET_KEY` | Flaskセッション署名キー | フォールバック値 |
+| `EDINETDB_API_KEY` | EDINET DB APIキー（日本株CF） | — |
+| `JQUANTS_API_KEY` | J-Quants APIキー（四半期CF） | — |
+| `DATA_DIR` | データ永続化ディレクトリ（Railway Volume） | — |
 
 ---
 
-## API
+## アーキテクチャ
+
+```
+[Browser] → POST /api/screen → [Flask app.py]
+                                      │
+                                      ├── Background Thread
+                                      │     └── screener.run_screening()
+                                      │           ├── Wikipedia → 銘柄リスト
+                                      │           ├── yfinance → 価格・出来高・ファンダ
+                                      │           ├── scoring_service → 複合スコア
+                                      │           ├── tagging_service → タグ・エントリー難易度
+                                      │           ├── regime_service → 市場レジーム
+                                      │           ├── OBV・ドローダウン・セクター相関
+                                      │           ├── us_advanced_service → 米国株高度分析
+                                      │           ├── 変化検知 → watchlist_events
+                                      │           └── 日次レポート生成
+                                      │
+                                      └── database.py → SQLite
+
+[Browser] ← GET /api/status（1秒ポーリング + ETA表示）
+[Browser] ← GET /api/results ← JSON
+```
+
+### ディレクトリ構成
+
+```
+surge/
+├── app.py                        # Flask API・バックグラウンドスレッド管理
+├── screener.py                   # スクリーニングエンジン（30+指標・OBV・DD・相関）
+├── database.py                   # SQLite CRUD・スキーママイグレーション
+│
+├── scoring_service.py            # 複合スコア計算・ウェイトプリセット
+├── tagging_service.py            # タグ付け・エントリー難易度判定
+├── regime_service.py             # 市場レジーム分類（7段階）
+├── questions_service.py          # 銘柄別チェック質問生成
+├── backtest_service.py           # モメンタムバックテスト
+├── seed_score_service.py         # 種まき度スコア（日本株）
+├── capital_allocation_service.py # 資本配分スコア
+├── us_advanced_service.py        # 米国株高度分析（EPS・機関・決算・オプション）
+├── data_quality_service.py       # データソース健全性管理
+│
+├── templates/
+│   ├── japan.html                # 日本株ページ
+│   ├── us.html                   # 米国株ページ
+│   └── howto.html                # 使い方ガイド
+├── static/
+│   ├── app.js                    # フロントエンド（チャート・テーブル・比較・通知）
+│   ├── style.css                 # Kokyu Design System
+│   └── favicon.svg
+├── KOKYU-UI-GUIDE.md             # デザインシステム仕様書
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## データソース
+
+| データ | ソース |
+|--------|--------|
+| S&P 500 / NASDAQ 100 構成銘柄 | Wikipedia |
+| 日経225 / グロース250 構成銘柄 | Wikipedia（日本語版） |
+| 価格・出来高・ファンダメンタルズ・空売り | Yahoo Finance (yfinance) |
+| セクターETF（RS算出） | Yahoo Finance（XLK, XLV, XLF 等 + SPY） |
+| 日本株CF・財務データ（年次） | EDINET DB API |
+| 日本株CF（四半期） | J-Quants API |
+
+## 技術スタック
+
+| レイヤー | 技術 |
+|----------|------|
+| バックエンド | Python 3.12 / Flask / pandas / numpy |
+| サービス層 | 9つの専用サービス（scoring / tagging / regime / us_advanced 等） |
+| データ取得 | yfinance / Wikipedia / EDINET DB API / J-Quants API |
+| データベース | SQLite（WALモード・自動マイグレーション） |
+| フロントエンド | Tailwind CSS (CDN) / Chart.js 4 / Vanilla JS |
+| デプロイ | Railway（Hobby plan + Persistent Volume） |
+
+---
+
+## API リファレンス
+
+<details>
+<summary>エンドポイント一覧（クリックで展開）</summary>
 
 ### スクリーニング
 
 | メソッド | パス | 用途 |
 |---------|------|------|
 | POST | `/api/screen` | スクリーニング開始 |
-| GET | `/api/status` | 進捗確認 |
-| GET | `/api/results` | 全インデックス結果取得（DB復元対応） |
-| GET | `/api/breadth/<index>` | 騰落線データ取得 |
+| GET | `/api/status` | 進捗確認（ETA含む） |
+| GET | `/api/results` | 全インデックス結果取得 |
+| POST | `/api/clear_error` | エラー状態リセット |
+| GET | `/api/breadth/<index>` | 騰落線データ |
 | GET | `/api/history` | 過去セッション一覧 |
 
 ### ウォッチリスト
@@ -171,16 +234,15 @@ python app.py
 | DELETE | `/api/watchlist/<ticker>` | 銘柄削除 |
 | GET | `/api/watchlist/events` | 変化イベント一覧 |
 | POST | `/api/watchlist/events/read` | イベント既読化 |
-| GET | `/api/watchlist/events/unread_count` | 未読件数取得 |
 
 ### 個別銘柄
 
 | メソッド | パス | 用途 |
 |---------|------|------|
-| GET | `/api/cf_analysis/<ticker>` | キャッシュフロー分析（日本株） |
-| GET | `/api/stock/<ticker>/explain` | AI解説生成 |
-| GET | `/api/stock/<ticker>/seed_score` | 種まき度スコア詳細 |
-| GET | `/api/stock/<ticker>/capital_allocation` | 資本配分スコア詳細 |
+| GET | `/api/cf_analysis/<ticker>` | CF分析（日本株） |
+| GET | `/api/stock/<ticker>/explain` | スコア分解・タグ・質問 |
+| GET | `/api/stock/<ticker>/seed_score` | 種まき度詳細 |
+| GET | `/api/stock/<ticker>/capital_allocation` | 資本配分詳細 |
 | GET | `/api/stock/<ticker>/us_advanced` | 米国株高度分析シグナル |
 
 ### バックテスト・品質
@@ -188,65 +250,24 @@ python app.py
 | メソッド | パス | 用途 |
 |---------|------|------|
 | POST | `/api/backtest` | バックテスト実行 |
-| GET | `/api/backtest/results` | バックテスト履歴取得 |
-| GET | `/api/data_quality/status` | データソース健全性取得 |
+| GET | `/api/backtest/results` | バックテスト履歴 |
+| GET | `/api/data_quality/status` | データソース健全性 |
 
 ### `/api/screen` インデックス指定
 
-| 値 | 処理内容 |
-|----|---------|
-| `japan_all` | 日経225 + グロース250（日本株ページ用） |
-| `us_all` | S&P 500 + NASDAQ 100（米国株ページ用） |
-| `nikkei225` | 日経225のみ |
-| `growth250` | グロース250のみ |
-| `sp500` | S&P 500のみ |
-| `nasdaq100` | NASDAQ 100のみ |
+| 値 | 処理 |
+|----|------|
+| `japan_all` | 日経225 + グロース250 |
+| `us_all` | S&P 500 + NASDAQ 100 |
+| `nikkei225` / `growth250` / `sp500` / `nasdaq100` | 単一インデックス |
+
+</details>
 
 ---
-
-## DBテーブル
-
-| テーブル | 用途 |
-|---------|------|
-| `screening_sessions` | スクリーニングセッション（インデックス・実行日時） |
-| `screening_results` | 銘柄別スクリーニング結果（スコア・テクニカル・ファンダメンタルズ） |
-| `watchlist` | ユーザーウォッチリスト |
-| `watchlist_events` | 変化検知イベント（新規ランクイン・スコア急変等） |
-| `breadth_data` | 騰落線データ時系列 |
-| `cf_cache` | EDINETキャッシュフローキャッシュ |
-| `edinet_companies` | EDINET企業情報キャッシュ |
-| `edinet_financials` | EDINET財務データキャッシュ |
-| `stock_explanations` | AI解説キャッシュ |
-| `backtest_results` | バックテスト結果 |
-| `data_source_status` | データソース健全性ログ |
-
----
-
-## データソース
-
-| データ | ソース |
-|--------|--------|
-| S&P 500 / NASDAQ 100 構成銘柄 | Wikipedia |
-| 日経225 / グロース250 構成銘柄 | Wikipedia（日本語版） |
-| 価格・出来高・ファンダメンタルズ | Yahoo Finance (yfinance) |
-| セクターETFデータ | Yahoo Finance（XLK, XLV, XLF 等） |
-| 日本株CF・財務データ（年次） | EDINET DB API |
-| 日本株CF（四半期） | J-Quants API（無料プラン） |
-
-## 技術スタック
-
-| レイヤー | 技術 |
-|----------|------|
-| バックエンド | Python 3.12 / Flask / pandas / numpy |
-| サービス層 | scoring_service / tagging_service / regime_service / us_advanced_service / data_quality_service 等 |
-| データ取得 | yfinance / Wikipedia / EDINET DB API / J-Quants API |
-| データベース | SQLite（sqlite3 標準ライブラリ） |
-| フロントエンド | Tailwind CSS (CDN) / Chart.js 4 / Vanilla JS |
-| デプロイ | Railway（Hobby plan + Persistent Volume） |
 
 ## 免責事項
 
-本ツールは教育・研究目的で作成されています。投資判断への利用は自己責任でお願いします。データはYahoo Finance・EDINET DB・J-Quantsから取得しており、正確性を保証するものではありません。
+本ツールは教育・研究目的で作成されています。投資判断への利用は自己責任でお願いします。データは Yahoo Finance・EDINET DB・J-Quants から取得しており、正確性を保証するものではありません。
 
 ## ライセンス
 
