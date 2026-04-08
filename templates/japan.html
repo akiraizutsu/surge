@@ -351,6 +351,28 @@
 
     <!-- Momentum Table -->
     <div id="tableArea" class="hidden">
+      <div class="flex items-center justify-end mb-2 gap-2">
+        <div class="relative">
+          <button onclick="toggleColumnMenu()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-gray-700 text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors cursor-pointer">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M3 8h18M3 12h18M3 16h18M3 20h18"/></svg>
+            列
+          </button>
+          <div id="colMenu" class="hidden absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-lg shadow-xl p-2 min-w-[140px]">
+            <div data-col="ret_1d" onclick="toggleColumn('ret_1d')" class="flex items-center gap-2 px-2 py-1 text-xs text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800 rounded cursor-pointer"><span class="col-check w-4 text-primary-500 font-bold">✓</span>1D</div>
+            <div data-col="ret_1w" onclick="toggleColumn('ret_1w')" class="flex items-center gap-2 px-2 py-1 text-xs text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800 rounded cursor-pointer"><span class="col-check w-4 text-primary-500 font-bold">✓</span>1W</div>
+            <div data-col="ret_1m" onclick="toggleColumn('ret_1m')" class="flex items-center gap-2 px-2 py-1 text-xs text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800 rounded cursor-pointer"><span class="col-check w-4 text-primary-500 font-bold">✓</span>1M</div>
+            <div data-col="ret_3m" onclick="toggleColumn('ret_3m')" class="flex items-center gap-2 px-2 py-1 text-xs text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800 rounded cursor-pointer"><span class="col-check w-4 text-primary-500 font-bold">✓</span>3M</div>
+            <div data-col="rsi" onclick="toggleColumn('rsi')" class="flex items-center gap-2 px-2 py-1 text-xs text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800 rounded cursor-pointer"><span class="col-check w-4 text-primary-500 font-bold">✓</span>RSI</div>
+            <div data-col="vol_ratio" onclick="toggleColumn('vol_ratio')" class="flex items-center gap-2 px-2 py-1 text-xs text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800 rounded cursor-pointer"><span class="col-check w-4 text-primary-500 font-bold">✓</span>出来高比</div>
+            <div data-col="rs_1m" onclick="toggleColumn('rs_1m')" class="flex items-center gap-2 px-2 py-1 text-xs text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800 rounded cursor-pointer"><span class="col-check w-4 text-primary-500 font-bold">✓</span>RS1M</div>
+            <div data-col="rs_3m" onclick="toggleColumn('rs_3m')" class="flex items-center gap-2 px-2 py-1 text-xs text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800 rounded cursor-pointer"><span class="col-check w-4 text-primary-500 font-bold">✓</span>RS3M</div>
+          </div>
+        </div>
+        <button onclick="exportCSV()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-gray-700 text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors cursor-pointer">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          CSV
+        </button>
+      </div>
       <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-x-auto">
         <table class="w-full text-sm">
           <thead>

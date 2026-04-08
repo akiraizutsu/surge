@@ -5,8 +5,8 @@ let currentIndex = 'sp500';
 let activeTab = 'sp500';
 let screeningData = null;
 let allResults = {};  // {sp500: data, nasdaq100: data, nikkei225: data}
-let sortKey = 'rank';
-let sortAsc = true;
+let sortKey = localStorage.getItem('surge-sort-key') || 'rank';
+let sortAsc = localStorage.getItem('surge-sort-asc') !== 'false';
 let activeSubTab = 'momentum';
 let pollTimer = null;
 let watchlistTickers = new Set();
@@ -26,6 +26,10 @@ let etaRateHistory = [];
 
 // Comparison mode
 let comparisonTickers = [];
+
+// Column visibility (persisted in localStorage)
+const DEFAULT_HIDDEN_COLS = ['ret_1d', 'ret_1w', 'vol_ratio', 'rs_1m', 'rs_3m'];
+let hiddenColumns = JSON.parse(localStorage.getItem('surge-hidden-cols') || 'null') || [...DEFAULT_HIDDEN_COLS];
 
 // ── Color System ──
 function hexToHsl(hex) {
@@ -73,11 +77,13 @@ function getPrimaryColor(lightness = 55) {
 
 // ── Dark Mode ──
 function toggleDark() {
+  document.documentElement.classList.add('dark-transition');
   document.documentElement.classList.toggle('dark');
   const isDark = document.documentElement.classList.contains('dark');
   localStorage.setItem('dark-mode', isDark);
   document.getElementById('darkIcon').textContent = isDark ? '\u2600' : '\u263E';
   if (screeningData) renderCharts(screeningData);
+  setTimeout(() => document.documentElement.classList.remove('dark-transition'), 350);
 }
 
 function initDarkMode() {
@@ -852,6 +858,66 @@ function renderBreadthChart(breadthData) {
   });
 }
 
+// ── Column Visibility ──
+function toggleColumnMenu() {
+  const menu = document.getElementById('colMenu');
+  if (!menu) return;
+  menu.classList.toggle('hidden');
+}
+
+function toggleColumn(col) {
+  const idx = hiddenColumns.indexOf(col);
+  if (idx >= 0) hiddenColumns.splice(idx, 1);
+  else hiddenColumns.push(col);
+  localStorage.setItem('surge-hidden-cols', JSON.stringify(hiddenColumns));
+  // Update checkmarks in menu
+  document.querySelectorAll('#colMenu [data-col]').forEach(el => {
+    const check = el.querySelector('.col-check');
+    if (check) check.textContent = hiddenColumns.includes(el.dataset.col) ? '' : '✓';
+  });
+  // Re-apply visibility to table headers and cells
+  applyColumnVisibility();
+}
+
+function applyColumnVisibility() {
+  document.querySelectorAll('[data-key]').forEach(th => {
+    const key = th.dataset.key;
+    const colIdx = th.cellIndex;
+    const hide = hiddenColumns.includes(key);
+    th.style.display = hide ? 'none' : '';
+    // Apply to all body cells in same column
+    const table = th.closest('table');
+    if (table) {
+      table.querySelectorAll(`tbody tr`).forEach(tr => {
+        const td = tr.cells[colIdx];
+        if (td) td.style.display = hide ? 'none' : '';
+      });
+    }
+  });
+}
+
+// ── CSV Export ──
+function exportCSV() {
+  if (!screeningData || !screeningData.momentum_ranking) return;
+  const ranking = screeningData.momentum_ranking;
+  const headers = ['Rank','Ticker','Name','Sector','Price','Score','RSI','1M%','3M%','Vol Ratio','MA50 Dev%','RS1M','RS3M','OBV Slope','Max DD 3M%','Entry Difficulty'];
+  const rows = ranking.map(r => {
+    const t = r.technicals;
+    return [r.rank, r.ticker, `"${(r.name||'').replace(/"/g,'""')}"`, `"${r.sector}"`, r.price, r.momentum_score,
+      t.rsi, t.ret_1m, t.ret_3m, t.vol_ratio, t.ma50_dev, t.rs_1m, t.rs_3m,
+      t.obv_slope || '', t.max_drawdown_3m || '', r.entry_difficulty || ''].join(',');
+  });
+  const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const idx = screeningData.index || activeTab;
+  a.href = url;
+  a.download = `surge_${idx}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── Table ──
 function renderTable(ranking) {
   let filtered = ranking;
@@ -940,10 +1006,19 @@ function renderTable(ranking) {
       status += `<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 font-bold">↑${se.score_delta > 0 ? '+' : ''}${se.score_delta}</span>`;
     }
 
+    // Mini sparkline from returns: 3M ago → 1M ago → 1W ago → 1D ago → now (normalized)
+    const sparkPts = [0, t.ret_3m - t.ret_1m, t.ret_3m - t.ret_1w, t.ret_3m - t.ret_1d, t.ret_3m].map(v => v || 0);
+    const spkMin = Math.min(...sparkPts), spkMax = Math.max(...sparkPts);
+    const spkRange = spkMax - spkMin || 1;
+    const spkH = 20, spkW = 40;
+    const spkPath = sparkPts.map((v, i) => `${i === 0 ? 'M' : 'L'}${(i / 4) * spkW},${spkH - ((v - spkMin) / spkRange) * spkH}`).join(' ');
+    const spkColor = t.ret_1m >= 0 ? '#10b981' : '#f43f5e';
+    const sparkSvg = `<svg width="${spkW}" height="${spkH}" class="inline-block align-middle hidden sm:inline-block"><path d="${spkPath}" fill="none" stroke="${spkColor}" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+
     return `<tr class="border-b border-slate-100 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors" onclick='showDetail(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
       ${starCell}
       <td class="px-2 sm:px-4 py-2 sm:py-3 text-slate-400 text-xs sm:text-sm whitespace-nowrap">${r.rank}</td>
-      <td class="px-2 sm:px-4 py-2 sm:py-3 font-semibold text-primary-600 dark:text-primary-400 text-xs sm:text-sm whitespace-nowrap">${r.ticker}</td>
+      <td class="px-2 sm:px-4 py-2 sm:py-3 font-semibold text-primary-600 dark:text-primary-400 text-xs sm:text-sm whitespace-nowrap"><span class="mr-1.5">${r.ticker}</span>${sparkSvg}</td>
       <td class="px-4 py-3 text-slate-500 dark:text-gray-400 hidden lg:table-cell text-xs max-w-[180px] truncate">${r.name}</td>
       <td class="px-4 py-3 text-xs text-slate-600 dark:text-gray-400 whitespace-nowrap hidden md:table-cell">${r.sector}</td>
       <td class="px-2 sm:px-4 py-2 sm:py-3 text-right font-mono text-xs sm:text-sm text-slate-900 dark:text-gray-100 whitespace-nowrap hidden sm:table-cell">${formatPrice(r.price)}</td>
@@ -1277,6 +1352,8 @@ document.querySelectorAll('.sortable').forEach(th => {
     const key = th.dataset.key;
     if (sortKey === key) sortAsc = !sortAsc;
     else { sortKey = key; sortAsc = true; }
+    localStorage.setItem('surge-sort-key', sortKey);
+    localStorage.setItem('surge-sort-asc', sortAsc);
 
     if (!screeningData) return;
     const ranking = [...screeningData.momentum_ranking];
