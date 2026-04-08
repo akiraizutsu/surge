@@ -171,6 +171,10 @@
         🔔
         <span id="notifBadge" class="hidden absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-rose-500 text-white rounded-full flex items-center justify-center"></span>
       </button>
+      <button onclick="showAlertBuilder()" title="アラート設定"
+        class="inline-flex items-center justify-center h-9 sm:h-10 px-3 sm:px-4 text-xs sm:text-sm font-medium border border-slate-200 dark:border-gray-700 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer">
+        ⚡
+      </button>
       <div class="flex items-center gap-1.5 sm:gap-2 leading-normal">
         <label for="topN" class="text-xs sm:text-sm text-slate-500 dark:text-gray-400">上位</label>
         <select id="topN" class="rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:ring-2 focus:ring-primary-500/50">
@@ -455,7 +459,17 @@
           <tbody id="rotationTableBody"></tbody>
         </table>
       </div>
+      <!-- Sector vs ETF 1M Return Comparison -->
+      <div class="card">
+        <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3">セクター平均 vs ETF（1Mリターン比較）</h3>
+        <div class="relative" style="height:280px">
+          <canvas id="chartSectorETF"></canvas>
+        </div>
+      </div>
     </div>
+
+    <!-- Alert Results -->
+    <div id="alertResults" class="hidden card border-amber-200 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/20 mb-4"></div>
 
     <!-- Breakout Table -->
     <div id="breakoutTableArea" class="hidden">
