@@ -399,6 +399,9 @@ function renderDashboard(data) {
   if (!hasUsAdvanced  && activeSubTab === 'us_advanced')  activeSubTab = 'momentum';
   if (!hasCorrelation && activeSubTab === 'correlation')  activeSubTab = 'momentum';
   switchSubTab(activeSubTab);
+
+  // Check user alerts against current data
+  checkAlerts(data.momentum_ranking);
 }
 
 function renderCharts(data) {
@@ -974,6 +977,7 @@ function renderTable(ranking) {
     if (t.bb_squeeze) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-orange-50 dark:bg-orange-900/20 text-orange-500 dark:text-orange-400 font-medium">BB圧</span>';
     if (t.obv_divergence === 'bullish_div') status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-medium">OBV↑乖離</span>';
     else if (t.obv_divergence === 'bearish_div') status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-300 font-medium">OBV↓乖離</span>';
+    if (t.adx >= 25) status += `<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full ${t.adx >= 40 ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400'} font-medium">ADX${Math.round(t.adx)}</span>`;
     if (!isJapanIndex()) {
       if (t.ema9_compliant) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-medium">W9EMA↑</span>';
       else if (t.ema9_broken) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300 font-medium">W9EMA割れ</span>';
@@ -1110,6 +1114,45 @@ function renderRotationTable(rotation) {
       <td class="px-2 sm:px-4 py-2 sm:py-3 text-center"><span class="inline-block px-2 py-0.5 text-[10px] rounded-full font-medium ${trendColors[s.trend] || ''}">${s.trend}</span></td>
     </tr>
   `).join('');
+
+  // Sector ETF return comparison bar chart
+  renderSectorETFCompare(rotation);
+}
+
+let _chartSectorETF = null;
+function renderSectorETFCompare(rotation) {
+  const canvas = document.getElementById('chartSectorETF');
+  if (!canvas || !rotation || rotation.length === 0) return;
+  const isDark = document.documentElement.classList.contains('dark');
+  const textColor = isDark ? '#9ca3af' : '#6b7280';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+
+  const sectors = rotation.map(s => s.sector.length > 8 ? s.sector.slice(0, 7) + '…' : s.sector);
+  const stock1m = rotation.map(s => s.ret_1m_avg);
+  const etf1m = rotation.map(s => s.etf_1m || 0);
+
+  if (_chartSectorETF) _chartSectorETF.destroy();
+  _chartSectorETF = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: sectors,
+      datasets: [
+        { label: 'セクター平均 1M', data: stock1m, backgroundColor: 'hsl(var(--hue) 65% 55% / 0.7)', borderRadius: 3 },
+        { label: 'ETF 1M', data: etf1m, backgroundColor: isDark ? 'rgba(148,163,184,0.4)' : 'rgba(100,116,139,0.4)', borderRadius: 3 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: {
+        legend: { labels: { color: textColor, font: { size: 10 } } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x > 0 ? '+' : ''}${ctx.parsed.x}%` } },
+      },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: textColor, callback: v => v + '%' } },
+        y: { grid: { display: false }, ticks: { color: textColor, font: { size: 10 } } },
+      },
+    },
+  });
 }
 
 // ── Breakout Table ──
@@ -1583,6 +1626,7 @@ async function showDetail(stock) {
         ['OBV乖離', {'bullish_div':'強気乖離','bearish_div':'弱気乖離','none':'-'}[t.obv_divergence] || '-'],
         ['最大DD(3M)', t.max_drawdown_3m != null ? t.max_drawdown_3m + '%' : '-'],
         ['現在DD', t.current_drawdown != null ? t.current_drawdown + '%' : '-'],
+        ['ADX', t.adx != null ? t.adx + (t.adx >= 25 ? ' (強トレンド)' : '') : '-'],
       ].map(([label, val]) => `
         <div class="bg-slate-50 dark:bg-gray-800 rounded-lg p-2.5 text-center border border-slate-100 dark:border-gray-700">
           <div class="text-[10px] text-slate-400 dark:text-gray-500">${label}</div>
@@ -1590,6 +1634,19 @@ async function showDetail(stock) {
         </div>
       `).join('')}
     </div>
+
+    ${(t.support_levels && t.support_levels.length > 0) || (t.resistance_levels && t.resistance_levels.length > 0) ? `
+    <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">サポート / レジスタンス</h3>
+    <div class="mb-6 grid grid-cols-2 gap-3">
+      <div class="bg-emerald-50 dark:bg-emerald-950/20 rounded-xl p-3 border border-emerald-100 dark:border-emerald-900/30">
+        <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mb-2">サポート (支持線)</div>
+        ${(t.support_levels || []).map((lv, i) => `<div class="text-sm font-mono text-emerald-700 dark:text-emerald-300">${formatPrice(lv)} <span class="text-[10px] text-emerald-500/60">S${i+1}</span></div>`).join('') || '<div class="text-xs text-slate-400">なし</div>'}
+      </div>
+      <div class="bg-rose-50 dark:bg-rose-950/20 rounded-xl p-3 border border-rose-100 dark:border-rose-900/30">
+        <div class="text-[10px] text-rose-600 dark:text-rose-400 font-medium mb-2">レジスタンス (抵抗線)</div>
+        ${(t.resistance_levels || []).map((lv, i) => `<div class="text-sm font-mono text-rose-700 dark:text-rose-300">${formatPrice(lv)} <span class="text-[10px] text-rose-500/60">R${i+1}</span></div>`).join('') || '<div class="text-xs text-slate-400">なし</div>'}
+      </div>
+    </div>` : ''}
 
     ${!isJapanIndex() && t.ema9 != null ? `
     <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">週足9EMAトレンド準拠</h3>
@@ -2625,6 +2682,7 @@ function showComparisonModal() {
     ['OBV乖離', s => ({'bullish_div':'強気','bearish_div':'弱気','none':'-'}[s.technicals.obv_divergence] || '-'), null],
     ['最大DD(3M)', s => s.technicals.max_drawdown_3m != null ? s.technicals.max_drawdown_3m + '%' : '-', 'low'],
     ['現在DD', s => s.technicals.current_drawdown != null ? s.technicals.current_drawdown + '%' : '-', 'low'],
+    ['ADX', s => s.technicals.adx != null ? s.technicals.adx : '-', 'high'],
     ['52W乖離', s => s.technicals.dist_from_high != null ? s.technicals.dist_from_high + '%' : '-', null],
     ['BB幅', s => s.technicals.bb_width != null ? s.technicals.bb_width + '%' : '-', null],
     ['セクター', s => s.sector || '-', null],
@@ -2672,6 +2730,103 @@ function clearComparison() {
   comparisonTickers = [];
   updateCompareFloating();
   if (screeningData) renderTable(screeningData.momentum_ranking);
+}
+
+// ── Alert Builder ──
+let savedAlerts = JSON.parse(localStorage.getItem('surge-alerts') || '[]');
+
+function showAlertBuilder() {
+  const overlay = document.createElement('div');
+  overlay.className = 'fixed inset-0 z-[55] flex items-center justify-center bg-black/40 backdrop-blur-sm';
+  overlay.id = 'alertBuilderOverlay';
+
+  const existingList = savedAlerts.map((a, i) => `
+    <div class="flex items-center justify-between bg-slate-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-xs">
+      <span class="text-slate-700 dark:text-gray-300">${a.label}</span>
+      <button onclick="removeAlert(${i})" class="text-rose-400 hover:text-rose-600 cursor-pointer text-sm">&times;</button>
+    </div>`).join('');
+
+  overlay.innerHTML = `
+    <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-700 p-6 max-w-md w-full mx-4 shadow-xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-slate-900 dark:text-gray-100">アラートビルダー</h3>
+        <button onclick="document.getElementById('alertBuilderOverlay')?.remove()" class="text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 text-2xl leading-none cursor-pointer">&times;</button>
+      </div>
+      <p class="text-xs text-slate-500 dark:text-gray-400 mb-4">条件に合致する銘柄がスクリーニング結果に見つかった場合、通知センターに表示されます。</p>
+      <div class="space-y-3 mb-4">
+        <div class="grid grid-cols-3 gap-2">
+          <select id="alertField" class="text-xs px-2 py-1.5 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-slate-700 dark:text-gray-300">
+            <option value="rsi">RSI</option>
+            <option value="momentum_score">スコア</option>
+            <option value="ret_1m">1Mリターン</option>
+            <option value="vol_ratio">出来高比</option>
+            <option value="adx">ADX</option>
+            <option value="max_drawdown_3m">最大DD</option>
+          </select>
+          <select id="alertOp" class="text-xs px-2 py-1.5 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-slate-700 dark:text-gray-300">
+            <option value="<">&lt;</option>
+            <option value=">">&gt;</option>
+            <option value="<=">&le;</option>
+            <option value=">=">&ge;</option>
+          </select>
+          <input id="alertValue" type="number" placeholder="値" class="text-xs px-2 py-1.5 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-slate-700 dark:text-gray-300">
+        </div>
+        <button onclick="addAlert()" class="w-full px-3 py-2 text-xs font-medium bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors cursor-pointer">条件を追加</button>
+      </div>
+      ${savedAlerts.length ? `<div class="space-y-1.5 mb-3"><div class="text-[10px] text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-1">保存済みアラート</div>${existingList}</div>` : ''}
+      <div class="text-[10px] text-slate-400 dark:text-gray-500">※アラートはlocalStorageに保存されます。スクリーニング実行時に自動チェックされます。</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
+function addAlert() {
+  const field = document.getElementById('alertField').value;
+  const op = document.getElementById('alertOp').value;
+  const val = parseFloat(document.getElementById('alertValue').value);
+  if (isNaN(val)) return;
+  const fieldLabels = { rsi: 'RSI', momentum_score: 'スコア', ret_1m: '1M%', vol_ratio: '出来高比', adx: 'ADX', max_drawdown_3m: '最大DD' };
+  savedAlerts.push({ field, op, value: val, label: `${fieldLabels[field] || field} ${op} ${val}` });
+  localStorage.setItem('surge-alerts', JSON.stringify(savedAlerts));
+  document.getElementById('alertBuilderOverlay')?.remove();
+  showAlertBuilder(); // re-render
+}
+
+function removeAlert(idx) {
+  savedAlerts.splice(idx, 1);
+  localStorage.setItem('surge-alerts', JSON.stringify(savedAlerts));
+  document.getElementById('alertBuilderOverlay')?.remove();
+  showAlertBuilder();
+}
+
+function checkAlerts(ranking) {
+  if (!savedAlerts.length || !ranking) return;
+  const matches = [];
+  for (const alert of savedAlerts) {
+    for (const r of ranking) {
+      let val;
+      if (['rsi', 'ret_1m', 'vol_ratio', 'adx', 'max_drawdown_3m'].includes(alert.field)) {
+        val = r.technicals?.[alert.field];
+      } else {
+        val = r[alert.field];
+      }
+      if (val == null) continue;
+      const pass =
+        alert.op === '<' ? val < alert.value :
+        alert.op === '>' ? val > alert.value :
+        alert.op === '<=' ? val <= alert.value :
+        alert.op === '>=' ? val >= alert.value : false;
+      if (pass) matches.push({ ticker: r.ticker, alert: alert.label, value: val });
+    }
+  }
+  if (matches.length > 0) {
+    const el = document.getElementById('alertResults');
+    if (el) {
+      el.classList.remove('hidden');
+      el.innerHTML = `<div class="text-[10px] text-amber-500 dark:text-amber-400 uppercase tracking-wider font-semibold mb-1.5">アラート一致 (${matches.length}件)</div>` +
+        matches.slice(0, 10).map(m => `<div class="text-xs text-slate-600 dark:text-gray-300 py-0.5"><span class="font-bold text-primary-500">${m.ticker}</span> ${m.alert} → ${typeof m.value === 'number' ? m.value.toFixed(1) : m.value}</div>`).join('');
+    }
+  }
 }
 
 init();

@@ -226,6 +226,8 @@ def init_db():
         _add_column_if_missing(conn, "screening_results", "obv_divergence", "TEXT")
         _add_column_if_missing(conn, "screening_results", "max_drawdown_3m", "REAL")
         _add_column_if_missing(conn, "screening_results", "current_drawdown", "REAL")
+        # ADX (trend strength)
+        _add_column_if_missing(conn, "screening_results", "adx", "REAL")
 
     conn.close()
 
@@ -275,8 +277,9 @@ def save_results(session_id, ranking):
                     earnings_date, days_to_earnings,
                     quality_score, entry_difficulty,
                     seed_score, capital_score, capital_grade,
-                    obv_slope, obv_divergence, max_drawdown_3m, current_drawdown
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    obv_slope, obv_divergence, max_drawdown_3m, current_drawdown,
+                    adx
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     session_id, r.get("rank"), r.get("ticker"), r.get("name"),
                     r.get("sector"), r.get("price"), r.get("momentum_score"),
@@ -300,6 +303,7 @@ def save_results(session_id, ranking):
                     r.get("seed_score"), r.get("capital_score"), r.get("capital_grade"),
                     t.get("obv_slope"), t.get("obv_divergence"),
                     t.get("max_drawdown_3m"), t.get("current_drawdown"),
+                    t.get("adx"),
                 ),
             )
             result_id = cur.lastrowid

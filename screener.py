@@ -372,6 +372,75 @@ def compute_drawdown(close):
     return max_dd, current_dd
 
 
+def compute_adx(high, low, close, period=14):
+    """Compute Average Directional Index (ADX) — measures trend strength regardless of direction."""
+    if len(close) < period * 2:
+        return 0.0
+
+    plus_dm = high.diff()
+    minus_dm = -low.diff()
+    plus_dm[plus_dm < 0] = 0
+    minus_dm[minus_dm < 0] = 0
+
+    # Where +DM > -DM, keep +DM, else 0 (and vice versa)
+    plus_dm[plus_dm <= minus_dm] = 0
+    minus_dm[minus_dm <= plus_dm] = 0
+
+    tr1 = high - low
+    tr2 = abs(high - close.shift())
+    tr3 = abs(low - close.shift())
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+    atr = tr.ewm(span=period, adjust=False).mean()
+    plus_di = 100 * (plus_dm.ewm(span=period, adjust=False).mean() / atr)
+    minus_di = 100 * (minus_dm.ewm(span=period, adjust=False).mean() / atr)
+
+    dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di).replace(0, 1)
+    adx = dx.ewm(span=period, adjust=False).mean()
+
+    return round(float(adx.iloc[-1]), 1) if not np.isnan(adx.iloc[-1]) else 0.0
+
+
+def compute_support_resistance(close, high, low, n_levels=3):
+    """Detect key support/resistance levels using pivot point clustering."""
+    if len(close) < 60:
+        return [], []
+
+    lookback = min(120, len(close))
+    h = high.iloc[-lookback:].values
+    l = low.iloc[-lookback:].values
+    c = close.iloc[-lookback:].values
+    price = float(c[-1])
+
+    # Find local peaks (resistance) and troughs (support)
+    pivots = []
+    for i in range(2, len(c) - 2):
+        if h[i] > h[i-1] and h[i] > h[i-2] and h[i] > h[i+1] and h[i] > h[i+2]:
+            pivots.append(float(h[i]))
+        if l[i] < l[i-1] and l[i] < l[i-2] and l[i] < l[i+1] and l[i] < l[i+2]:
+            pivots.append(float(l[i]))
+
+    if not pivots:
+        return [], []
+
+    # Cluster nearby pivots (within 2% of each other)
+    pivots.sort()
+    clusters = []
+    current_cluster = [pivots[0]]
+    for p in pivots[1:]:
+        if p / current_cluster[0] - 1 < 0.02:
+            current_cluster.append(p)
+        else:
+            clusters.append(round(sum(current_cluster) / len(current_cluster), 2))
+            current_cluster = [p]
+    clusters.append(round(sum(current_cluster) / len(current_cluster), 2))
+
+    support = sorted([lv for lv in clusters if lv < price], reverse=True)[:n_levels]
+    resistance = sorted([lv for lv in clusters if lv >= price])[:n_levels]
+
+    return support, resistance
+
+
 RS_ALPHA = 2.0  # Threshold for relative strength classification (%)
 
 THEME_TICKERS = {"MSTR", "COIN", "MARA", "RIOT", "CLSK", "BITF", "HUT"}
@@ -596,6 +665,14 @@ def screen_momentum(tickers, sectors, progress_cb=None, is_japan=False):
             # Drawdown analysis (3-month lookback)
             max_drawdown_3m, current_drawdown = compute_drawdown(close)
 
+            # ADX (trend strength)
+            adx_val = compute_adx(df["High"], df["Low"], close) if "High" in df.columns else 0.0
+
+            # Support / Resistance levels
+            support_levels, resistance_levels = compute_support_resistance(
+                close, df["High"], df["Low"]
+            ) if "High" in df.columns else ([], [])
+
             # Sprint 3: quality score (computed from raw OHLCV here while df is in scope)
             _quality = quality_service.compute_quality(
                 df=df,
@@ -646,6 +723,9 @@ def screen_momentum(tickers, sectors, progress_cb=None, is_japan=False):
                 "obv_divergence": obv_divergence,
                 "max_drawdown_3m": max_drawdown_3m,
                 "current_drawdown": current_drawdown,
+                "adx": adx_val,
+                "support_levels": support_levels,
+                "resistance_levels": resistance_levels,
                 # Sprint 3 quality (earnings_days not yet available here)
                 "_quality_components": _quality["quality_components"],
                 "_quality_base_score": _quality["quality_score"],
@@ -1629,6 +1709,9 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
                 "obv_divergence": row.get("obv_divergence", "none"),
                 "max_drawdown_3m": row.get("max_drawdown_3m"),
                 "current_drawdown": row.get("current_drawdown"),
+                "adx": row.get("adx", 0),
+                "support_levels": row.get("support_levels", []),
+                "resistance_levels": row.get("resistance_levels", []),
             },
             "fundamentals": {
                 "market_cap_b": fund.get("market_cap_b"),
