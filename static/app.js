@@ -870,16 +870,16 @@ function renderTable(ranking) {
       ? `<button onclick="showCfModal('${r.ticker}',event)" class="text-[9px] font-bold px-1 py-0.5 rounded bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-colors leading-none cursor-pointer">CF</button>`
       : '';
     const compareChecked = comparisonTickers.includes(r.ticker);
-    const starCell = `<td class="px-2 py-3 text-center">
-      <div class="flex flex-col items-center gap-0.5">
+    const starCell = `<td class="px-1.5 sm:px-2 py-2 sm:py-3">
+      <div class="flex items-center gap-1.5">
+        <input type="checkbox" ${compareChecked ? 'checked' : ''} onclick="toggleCompare('${r.ticker}', event)"
+          class="w-3.5 h-3.5 rounded border-slate-300 dark:border-gray-600 accent-primary-500 cursor-pointer shrink-0" title="比較に追加">
         <button onclick="toggleStar('${r.ticker}', event)"
-          class="text-lg leading-none cursor-pointer hover:scale-110 transition-transform ${starred ? 'text-amber-400' : 'text-slate-300 dark:text-gray-600'}"
+          class="text-base leading-none cursor-pointer hover:scale-110 transition-transform shrink-0 ${starred ? 'text-amber-400' : 'text-slate-300 dark:text-gray-600'}"
           aria-label="${starred ? 'ウォッチリストから削除' : 'ウォッチリストに追加'}">
           ${starred ? '&#9733;' : '&#9734;'}
         </button>
         ${cfBtn}
-        <input type="checkbox" ${compareChecked ? 'checked' : ''} onclick="toggleCompare('${r.ticker}', event)"
-          class="w-3 h-3 rounded border-slate-300 dark:border-gray-600 accent-primary-500 cursor-pointer" title="比較">
       </div>
     </td>`;
 
