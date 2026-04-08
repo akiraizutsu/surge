@@ -186,8 +186,20 @@
           <div id="progressBar" class="bg-primary-500 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
         </div>
         <span id="progressText" class="text-xs sm:text-sm text-slate-500 dark:text-gray-400 whitespace-nowrap">0%</span>
+        <span id="etaText" class="text-xs text-slate-400 dark:text-gray-500 whitespace-nowrap ml-1"></span>
       </div>
       <span id="statusText" class="text-xs sm:text-sm text-slate-500 dark:text-gray-400 basis-full sm:basis-auto"></span>
+      <!-- Error Recovery UI -->
+      <div id="errorRecovery" class="hidden bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800 rounded-xl p-4 basis-full">
+        <div class="flex items-start gap-3">
+          <span class="text-rose-500 text-lg shrink-0">&#9888;</span>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-rose-700 dark:text-rose-300">スクリーニングエラー</p>
+            <p id="errorMessage" class="text-xs text-rose-600 dark:text-rose-400 mt-1 break-all"></p>
+          </div>
+          <button id="errorRetryBtn" class="px-3 py-1.5 text-xs font-medium bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-lg hover:bg-rose-200 dark:hover:bg-rose-900/50 transition-colors cursor-pointer shrink-0">再試行</button>
+        </div>
+      </div>
     </div>
 
     <!-- Index Tabs (US page: S&P 500 + NASDAQ 100) -->
@@ -326,6 +338,10 @@
       <button id="subTabUsAdvanced" onclick="switchSubTab('us_advanced')"
         class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab">
         米国株分析
+      </button>
+      <button id="subTabCorrelation" onclick="switchSubTab('correlation')"
+        class="flex-1 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer index-tab" style="display:none">
+        セクター相関
       </button>
     </div>
 
@@ -505,6 +521,38 @@
           <tbody id="usAdvancedTableBody"></tbody>
         </table>
       </div>
+    </div>
+
+    <!-- Sector Correlation Matrix -->
+    <div id="correlationMatrixArea" class="hidden">
+      <div class="card p-4 sm:p-6">
+        <h3 class="text-sm font-semibold text-slate-900 dark:text-gray-100 mb-4">セクター間相関マトリクス</h3>
+        <p class="text-xs text-slate-400 dark:text-gray-500 mb-4">直近60営業日の日次リターンに基づくセクター間相関係数。分散投資の判断材料としてご活用ください。</p>
+        <div id="correlationContent"></div>
+      </div>
+    </div>
+
+    <!-- Comparison Modal -->
+    <div id="compareModal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4" onclick="if(event.target===this)closeCompareModal()">
+      <div class="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-xl border border-slate-200 dark:border-gray-800 shadow-xl max-w-4xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-y-auto">
+        <div class="p-4 sm:p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-bold text-slate-900 dark:text-gray-100">銘柄比較</h2>
+            <div class="flex items-center gap-2">
+              <button onclick="clearComparison()" class="text-xs px-2 py-1 rounded-lg border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors cursor-pointer">リセット</button>
+              <button onclick="closeCompareModal()" class="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 text-2xl leading-none rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer">&times;</button>
+            </div>
+          </div>
+          <div id="compareContent"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floating Compare Button -->
+    <div id="compareFloating" class="hidden fixed bottom-6 right-6 z-40">
+      <button onclick="showComparisonModal()" class="px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-medium rounded-full shadow-lg hover:shadow-xl transition-all cursor-pointer flex items-center gap-2">
+        比較 (<span id="compareCount">0</span>)
+      </button>
     </div>
 
     <!-- Detail Modal -->

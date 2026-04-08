@@ -20,6 +20,13 @@ let chartBreadth = null;
 let chartSectorRotation = null;
 let chartQualityMatrix = null;
 
+// ETA tracking
+let screeningStartTime = null;
+let etaRateHistory = [];
+
+// Comparison mode
+let comparisonTickers = [];
+
 // ── Color System ──
 function hexToHsl(hex) {
   let r = parseInt(hex.slice(1, 3), 16) / 255;
@@ -115,6 +122,18 @@ async function runScreening() {
   document.getElementById('progressArea').classList.remove('hidden');
   document.getElementById('emptyState').classList.add('hidden');
   document.getElementById('statusText').textContent = '';
+  document.getElementById('errorRecovery')?.classList.add('hidden');
+
+  // ETA tracking
+  screeningStartTime = Date.now();
+  etaRateHistory = [];
+  const etaEl = document.getElementById('etaText');
+  if (etaEl) etaEl.textContent = '';
+
+  // Browser notification permission (user gesture context)
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
 
   try {
     const resp = await fetch('/api/screen', {
@@ -151,16 +170,53 @@ function pollProgress() {
       document.getElementById('progressBar').style.width = status.progress_pct + '%';
       document.getElementById('progressText').textContent = status.progress_pct + '%';
 
+      // ETA calculation
+      if (status.progress_pct > 3 && status.running && screeningStartTime) {
+        const elapsed = (Date.now() - screeningStartTime) / 1000;
+        const rate = status.progress_pct / elapsed;
+        etaRateHistory.push(rate);
+        if (etaRateHistory.length > 5) etaRateHistory.shift();
+        const avgRate = etaRateHistory.reduce((a, b) => a + b, 0) / etaRateHistory.length;
+        const remaining = (100 - status.progress_pct) / avgRate;
+        const mins = Math.floor(remaining / 60);
+        const secs = Math.floor(remaining % 60);
+        const etaEl = document.getElementById('etaText');
+        if (etaEl) etaEl.textContent = mins > 0 ? `(残り約${mins}分${secs}秒)` : `(残り約${secs}秒)`;
+      }
+
       if (!status.running) {
         clearInterval(pollTimer);
         pollTimer = null;
 
         document.getElementById('btnRun').disabled = false;
         document.getElementById('btnRun').textContent = 'スクリーニング実行';
+        const etaEl = document.getElementById('etaText');
+        if (etaEl) etaEl.textContent = '';
 
         if (status.error) {
-          document.getElementById('statusText').textContent = 'エラー: ' + status.error;
+          // Error recovery UI
           document.getElementById('progressArea').classList.add('hidden');
+          const errorArea = document.getElementById('errorRecovery');
+          if (errorArea) {
+            errorArea.classList.remove('hidden');
+            document.getElementById('errorMessage').textContent = status.error;
+            document.getElementById('errorRetryBtn').onclick = async () => {
+              await fetch('/api/clear_error', { method: 'POST' });
+              errorArea.classList.add('hidden');
+              runScreening();
+            };
+          } else {
+            document.getElementById('statusText').textContent = 'エラー: ' + status.error;
+          }
+          // Browser notification on error
+          if ('Notification' in window && Notification.permission === 'granted') {
+            const n = new Notification('Surge - スクリーニングエラー', {
+              body: status.error,
+              icon: '/static/favicon.svg',
+              tag: 'screening-error',
+            });
+            setTimeout(() => n.close(), 8000);
+          }
         } else if (status.has_result) {
           // Fetch all results
           const allResp = await fetch('/api/results');
@@ -187,6 +243,16 @@ function pollProgress() {
             }
           }
           document.getElementById('progressArea').classList.add('hidden');
+          // Browser notification on success
+          if ('Notification' in window && Notification.permission === 'granted') {
+            const total = allResults[activeTab]?.total_screened || 0;
+            const n = new Notification('Surge - スクリーニング完了', {
+              body: `${total}銘柄の分析が完了しました`,
+              icon: '/static/favicon.svg',
+              tag: 'screening-complete',
+            });
+            setTimeout(() => n.close(), 8000);
+          }
         }
       }
     } catch (e) {
@@ -279,6 +345,7 @@ function renderDashboard(data) {
   const hasQuality      = data.momentum_ranking    && data.momentum_ranking.some(r => r.quality_score != null);
   const hasSeed         = data.seed_ranking        && data.seed_ranking.length > 0;
   const hasUsAdvanced   = data.us_advanced_ranking && data.us_advanced_ranking.length > 0;
+  const hasCorrelation  = data.sector_correlations && data.sector_correlations.sectors && data.sector_correlations.sectors.length >= 3;
   const contrarianBtn   = document.getElementById('subTabContrarian');
   const timeArbBtn      = document.getElementById('subTabTimeArb');
   const smallcapBtn     = document.getElementById('subTabSmallcap');
@@ -287,6 +354,7 @@ function renderDashboard(data) {
   const qualityBtn      = document.getElementById('subTabQuality');
   const seedBtn         = document.getElementById('subTabSeed');
   const usAdvancedBtn   = document.getElementById('subTabUsAdvanced');
+  const correlationBtn  = document.getElementById('subTabCorrelation');
   if (contrarianBtn)  contrarianBtn.style.display  = hasContrarian  ? '' : 'none';
   if (timeArbBtn)     timeArbBtn.style.display     = hasTimeArb     ? '' : 'none';
   if (smallcapBtn)    smallcapBtn.style.display    = hasSmallcap    ? '' : 'none';
@@ -295,6 +363,7 @@ function renderDashboard(data) {
   if (qualityBtn)     qualityBtn.style.display     = hasQuality     ? '' : 'none';
   if (seedBtn)        seedBtn.style.display        = hasSeed        ? '' : 'none';
   if (usAdvancedBtn)  usAdvancedBtn.style.display  = hasUsAdvanced  ? '' : 'none';
+  if (correlationBtn) correlationBtn.style.display = hasCorrelation ? '' : 'none';
   // Fall back to momentum if active tab has no data
   if (!hasContrarian  && activeSubTab === 'contrarian')   activeSubTab = 'momentum';
   if (!hasTimeArb     && activeSubTab === 'time_arb')     activeSubTab = 'momentum';
@@ -304,6 +373,7 @@ function renderDashboard(data) {
   if (!hasQuality     && activeSubTab === 'quality')      activeSubTab = 'momentum';
   if (!hasSeed        && activeSubTab === 'seed')         activeSubTab = 'momentum';
   if (!hasUsAdvanced  && activeSubTab === 'us_advanced')  activeSubTab = 'momentum';
+  if (!hasCorrelation && activeSubTab === 'correlation')  activeSubTab = 'momentum';
   switchSubTab(activeSubTab);
 }
 
@@ -439,14 +509,14 @@ function switchSubTab(tab) {
     rotation: 'subTabRotation', breakout: 'subTabBreakout',
     time_arb: 'subTabTimeArb', smallcap: 'subTabSmallcap',
     quality: 'subTabQuality', seed: 'subTabSeed',
-    us_advanced: 'subTabUsAdvanced',
+    us_advanced: 'subTabUsAdvanced', correlation: 'subTabCorrelation',
   };
   document.getElementById(tabBtnMap[tab])?.classList.add('active');
 
   // Hide all sub-tab areas
   ['tableArea', 'contrarianTableArea', 'sectorRotationArea', 'breakoutTableArea',
    'timeArbTableArea', 'smallcapTableArea', 'qualityMatrixArea', 'seedTableArea',
-   'usAdvancedTableArea'].forEach(id => {
+   'usAdvancedTableArea', 'correlationMatrixArea'].forEach(id => {
     document.getElementById(id)?.classList.add('hidden');
   });
 
@@ -481,6 +551,9 @@ function switchSubTab(tab) {
   } else if (tab === 'us_advanced') {
     document.getElementById('usAdvancedTableArea')?.classList.remove('hidden');
     if (screeningData && screeningData.us_advanced_ranking) renderUsAdvancedTable(screeningData.us_advanced_ranking);
+  } else if (tab === 'correlation') {
+    document.getElementById('correlationMatrixArea')?.classList.remove('hidden');
+    if (screeningData && screeningData.sector_correlations) renderCorrelationMatrix(screeningData.sector_correlations);
   }
 }
 
@@ -778,6 +851,7 @@ function renderTable(ranking) {
     const cfBtn = isJapanIndex()
       ? `<button onclick="showCfModal('${r.ticker}',event)" class="text-[9px] font-bold px-1 py-0.5 rounded bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-colors leading-none cursor-pointer">CF</button>`
       : '';
+    const compareChecked = comparisonTickers.includes(r.ticker);
     const starCell = `<td class="px-2 py-3 text-center">
       <div class="flex flex-col items-center gap-0.5">
         <button onclick="toggleStar('${r.ticker}', event)"
@@ -786,6 +860,8 @@ function renderTable(ranking) {
           ${starred ? '&#9733;' : '&#9734;'}
         </button>
         ${cfBtn}
+        <input type="checkbox" ${compareChecked ? 'checked' : ''} onclick="toggleCompare('${r.ticker}', event)"
+          class="w-3 h-3 rounded border-slate-300 dark:border-gray-600 accent-primary-500 cursor-pointer" title="比較">
       </div>
     </td>`;
 
@@ -807,6 +883,8 @@ function renderTable(ranking) {
     if (rsInfo) status += `<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full ${rsInfo.cls} font-medium">${rsInfo.text}</span>`;
     if (t.is_breakout) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 font-medium">52W</span>';
     if (t.bb_squeeze) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-orange-50 dark:bg-orange-900/20 text-orange-500 dark:text-orange-400 font-medium">BB圧</span>';
+    if (t.obv_divergence === 'bullish_div') status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-medium">OBV↑乖離</span>';
+    else if (t.obv_divergence === 'bearish_div') status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-300 font-medium">OBV↓乖離</span>';
     if (!isJapanIndex()) {
       if (t.ema9_compliant) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-medium">W9EMA↑</span>';
       else if (t.ema9_broken) status += '<span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300 font-medium">W9EMA割れ</span>';
@@ -1401,6 +1479,10 @@ async function showDetail(stock) {
         ['BB幅', t.bb_width != null ? t.bb_width + '%' : '-'],
         ['決算日', f.earnings_date || '-'],
         ['決算まで', f.days_to_earnings != null ? f.days_to_earnings + '日' : '-'],
+        ['OBVスロープ', t.obv_slope != null ? (t.obv_slope > 0 ? '+' : '') + t.obv_slope + '%' : '-'],
+        ['OBV乖離', {'bullish_div':'強気乖離','bearish_div':'弱気乖離','none':'-'}[t.obv_divergence] || '-'],
+        ['最大DD(3M)', t.max_drawdown_3m != null ? t.max_drawdown_3m + '%' : '-'],
+        ['現在DD', t.current_drawdown != null ? t.current_drawdown + '%' : '-'],
       ].map(([label, val]) => `
         <div class="bg-slate-50 dark:bg-gray-800 rounded-lg p-2.5 text-center border border-slate-100 dark:border-gray-700">
           <div class="text-[10px] text-slate-400 dark:text-gray-500">${label}</div>
@@ -1546,9 +1628,34 @@ async function loadWatchlist() {
   } catch (e) { /* ignore */ }
 }
 
+function showConfirmDialog(title, message) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm';
+    overlay.innerHTML = `
+      <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-700 p-6 max-w-sm w-full mx-4 shadow-xl">
+        <h3 class="text-lg font-bold text-slate-900 dark:text-gray-100">${title}</h3>
+        <p class="text-sm text-slate-600 dark:text-gray-400 mt-2">${message}</p>
+        <div class="flex gap-3 mt-4">
+          <button id="_confirmCancel" class="flex-1 px-3 py-2 text-sm font-medium rounded-lg border border-slate-200 dark:border-gray-700 text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors cursor-pointer">キャンセル</button>
+          <button id="_confirmOk" class="flex-1 px-3 py-2 text-sm font-medium rounded-lg bg-rose-500 text-white hover:bg-rose-600 transition-colors cursor-pointer">削除</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#_confirmCancel').onclick = () => { overlay.remove(); resolve(false); };
+    overlay.querySelector('#_confirmOk').onclick = () => { overlay.remove(); resolve(true); };
+    overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } };
+  });
+}
+
 async function toggleStar(ticker, event) {
   event.stopPropagation();
   if (watchlistTickers.has(ticker)) {
+    const confirmed = await showConfirmDialog(
+      'ウォッチリスト削除',
+      `${ticker} をウォッチリストから削除しますか？`
+    );
+    if (!confirmed) return;
     await fetch(`/api/watchlist/${ticker}`, { method: 'DELETE' });
     watchlistTickers.delete(ticker);
   } else {
@@ -2325,6 +2432,146 @@ async function refreshDataQuality() {
   } catch (_) {
     el.innerHTML = '<span class="text-rose-400">取得失敗</span>';
   }
+}
+
+// ── Sector Correlation Matrix ──
+function renderCorrelationMatrix(corrData) {
+  const container = document.getElementById('correlationContent');
+  if (!container || !corrData) return;
+  const sectors = corrData.sectors;
+  const matrix = corrData.matrix;
+  const isDark = document.documentElement.classList.contains('dark');
+
+  function corrColor(v) {
+    if (v >= 0.7) return isDark ? 'rgba(239,68,68,0.4)' : 'rgba(239,68,68,0.3)';
+    if (v >= 0.4) return isDark ? 'rgba(251,146,60,0.3)' : 'rgba(251,146,60,0.25)';
+    if (v >= 0.1) return isDark ? 'rgba(250,204,21,0.2)' : 'rgba(250,204,21,0.15)';
+    if (v >= -0.1) return isDark ? 'rgba(148,163,184,0.1)' : 'rgba(148,163,184,0.08)';
+    if (v >= -0.4) return isDark ? 'rgba(96,165,250,0.2)' : 'rgba(96,165,250,0.15)';
+    return isDark ? 'rgba(59,130,246,0.4)' : 'rgba(59,130,246,0.3)';
+  }
+
+  const shortName = (s) => s.length > 10 ? s.slice(0, 9) + '…' : s;
+
+  let html = '<div class="overflow-x-auto"><table class="text-xs w-full border-collapse">';
+  html += '<tr><th class="p-1"></th>';
+  sectors.forEach(s => { html += `<th class="p-1 text-center font-medium text-slate-500 dark:text-gray-400 whitespace-nowrap" title="${s}">${shortName(s)}</th>`; });
+  html += '</tr>';
+  for (let i = 0; i < sectors.length; i++) {
+    html += `<tr><th class="p-1 text-right font-medium text-slate-500 dark:text-gray-400 whitespace-nowrap pr-2" title="${sectors[i]}">${shortName(sectors[i])}</th>`;
+    for (let j = 0; j < sectors.length; j++) {
+      const v = matrix[i][j];
+      const bg = corrColor(v);
+      const bold = i === j ? 'font-bold' : '';
+      html += `<td class="p-1 text-center ${bold} text-slate-700 dark:text-gray-300 border border-slate-100 dark:border-gray-800" style="background:${bg}" title="${sectors[i]} × ${sectors[j]}: ${v}">${v.toFixed(2)}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</table></div>';
+  html += `<div class="mt-3 flex items-center gap-4 text-[10px] text-slate-400 dark:text-gray-500">
+    <span>相関の読み方:</span>
+    <span style="display:inline-block;width:12px;height:12px;background:${corrColor(0.8)};border-radius:2px"></span> 強い正の相関 (0.7+)
+    <span style="display:inline-block;width:12px;height:12px;background:${corrColor(0)};border-radius:2px"></span> 無相関
+    <span style="display:inline-block;width:12px;height:12px;background:${corrColor(-0.5)};border-radius:2px"></span> 負の相関
+  </div>`;
+  container.innerHTML = html;
+}
+
+// ── Stock Comparison ──
+function toggleCompare(ticker, event) {
+  event.stopPropagation();
+  const idx = comparisonTickers.indexOf(ticker);
+  if (idx >= 0) {
+    comparisonTickers.splice(idx, 1);
+  } else if (comparisonTickers.length < 3) {
+    comparisonTickers.push(ticker);
+  }
+  updateCompareFloating();
+  if (screeningData) renderTable(screeningData.momentum_ranking);
+}
+
+function updateCompareFloating() {
+  const el = document.getElementById('compareFloating');
+  if (!el) return;
+  const cnt = document.getElementById('compareCount');
+  if (cnt) cnt.textContent = comparisonTickers.length;
+  if (comparisonTickers.length >= 2) {
+    el.classList.remove('hidden');
+  } else {
+    el.classList.add('hidden');
+  }
+}
+
+function showComparisonModal() {
+  if (!screeningData || comparisonTickers.length < 2) return;
+  const stocks = comparisonTickers.map(tk => screeningData.momentum_ranking.find(r => r.ticker === tk)).filter(Boolean);
+  if (stocks.length < 2) return;
+
+  const fmtPct = (v) => v != null ? (v > 0 ? '+' : '') + Number(v).toFixed(2) + '%' : '-';
+  const fmtVal = (v) => v != null && v !== 0 ? v : '-';
+
+  const metrics = [
+    ['モメンタムスコア', s => s.momentum_score, 'high'],
+    ['株価', s => formatPrice(s.price), null],
+    ['RSI', s => s.technicals.rsi, null],
+    ['1ヶ月リターン', s => fmtPct(s.technicals.ret_1m), 'high'],
+    ['3ヶ月リターン', s => fmtPct(s.technicals.ret_3m), 'high'],
+    ['出来高比', s => s.technicals.vol_ratio ? s.technicals.vol_ratio + 'x' : '-', 'high'],
+    ['50日MA乖離', s => fmtPct(s.technicals.ma50_dev), null],
+    ['200日MA乖離', s => fmtPct(s.technicals.ma200_dev), null],
+    ['品質スコア', s => s.quality_score != null ? s.quality_score.toFixed(1) : '-', 'high'],
+    ['エントリー難易度', s => s.entry_difficulty || '-', null],
+    ['OBVスロープ', s => s.technicals.obv_slope != null ? s.technicals.obv_slope + '%' : '-', 'high'],
+    ['OBV乖離', s => ({'bullish_div':'強気','bearish_div':'弱気','none':'-'}[s.technicals.obv_divergence] || '-'), null],
+    ['最大DD(3M)', s => s.technicals.max_drawdown_3m != null ? s.technicals.max_drawdown_3m + '%' : '-', 'low'],
+    ['現在DD', s => s.technicals.current_drawdown != null ? s.technicals.current_drawdown + '%' : '-', 'low'],
+    ['52W乖離', s => s.technicals.dist_from_high != null ? s.technicals.dist_from_high + '%' : '-', null],
+    ['BB幅', s => s.technicals.bb_width != null ? s.technicals.bb_width + '%' : '-', null],
+    ['セクター', s => s.sector || '-', null],
+    ['RS判定', s => ({'prime':'本命','short_term':'短期','sector_driven':'劣後','theme':'テーマ'}[s.technicals.rs_label] || '-'), null],
+  ];
+
+  let rows = '';
+  for (const [label, getter, bestDir] of metrics) {
+    const values = stocks.map(getter);
+    const numVals = values.map(v => parseFloat(String(v).replace(/[^-\d.]/g, '')));
+    let bestIdx = -1;
+    if (bestDir && numVals.some(v => !isNaN(v))) {
+      if (bestDir === 'high') bestIdx = numVals.indexOf(Math.max(...numVals.filter(v => !isNaN(v))));
+      else bestIdx = numVals.indexOf(Math.min(...numVals.filter(v => !isNaN(v))));
+    }
+    const cells = values.map((v, i) => {
+      const cls = i === bestIdx ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : '';
+      return `<td class="px-3 py-2 text-center text-sm ${cls}">${v}</td>`;
+    }).join('');
+    rows += `<tr class="border-b border-slate-100 dark:border-gray-800"><td class="px-3 py-2 text-xs font-medium text-slate-500 dark:text-gray-400 whitespace-nowrap">${label}</td>${cells}</tr>`;
+  }
+
+  const headers = stocks.map(s => `<th class="px-3 py-2 text-center text-sm font-bold text-slate-900 dark:text-gray-100">${s.ticker}<div class="text-[10px] font-normal text-slate-400">${s.name || ''}</div></th>`).join('');
+
+  document.getElementById('compareContent').innerHTML = `
+    <div class="overflow-x-auto">
+      <table class="w-full border-collapse">
+        <thead><tr class="border-b-2 border-slate-200 dark:border-gray-700"><th class="px-3 py-2 text-left text-xs text-slate-400">指標</th>${headers}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+  const modal = document.getElementById('compareModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function closeCompareModal() {
+  const modal = document.getElementById('compareModal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+function clearComparison() {
+  comparisonTickers = [];
+  updateCompareFloating();
+  if (screeningData) renderTable(screeningData.momentum_ranking);
 }
 
 init();

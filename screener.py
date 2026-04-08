@@ -328,6 +328,50 @@ def compute_macd(series, fast=12, slow=26, signal=9):
     return macd_line, signal_line, histogram
 
 
+def compute_obv(close, volume):
+    """Compute On-Balance Volume, its 20-day slope (normalised %), and divergence signal."""
+    direction = np.sign(close.diff().fillna(0))
+    obv = (direction * volume).cumsum()
+
+    # 20-day OBV slope (linear regression, normalised as % of mean OBV)
+    lookback = min(20, len(obv))
+    obv_tail = obv.iloc[-lookback:].values.astype(float)
+    x = np.arange(lookback, dtype=float)
+    if lookback >= 5 and np.std(obv_tail) > 0:
+        slope = np.polyfit(x, obv_tail, 1)[0]
+        mean_obv = np.mean(np.abs(obv_tail)) or 1.0
+        obv_slope = round(float(slope / mean_obv * 100), 2)
+    else:
+        obv_slope = 0.0
+
+    # Divergence: compare 20-day price trend vs OBV trend
+    if len(close) >= 20:
+        price_up = float(close.iloc[-1]) > float(close.iloc[-20])
+        obv_up = float(obv.iloc[-1]) > float(obv.iloc[-20])
+        if price_up and not obv_up:
+            obv_divergence = "bearish_div"
+        elif not price_up and obv_up:
+            obv_divergence = "bullish_div"
+        else:
+            obv_divergence = "none"
+    else:
+        obv_divergence = "none"
+
+    return obv_slope, obv_divergence
+
+
+def compute_drawdown(close):
+    """Compute max drawdown and current drawdown over last 3 months (66 trading days)."""
+    lookback = min(66, len(close))
+    window = close.iloc[-lookback:]
+    rolling_max = window.cummax()
+    drawdown_series = (window / rolling_max - 1) * 100
+
+    max_dd = round(float(drawdown_series.min()), 2)
+    current_dd = round(float(drawdown_series.iloc[-1]), 2)
+    return max_dd, current_dd
+
+
 RS_ALPHA = 2.0  # Threshold for relative strength classification (%)
 
 THEME_TICKERS = {"MSTR", "COIN", "MARA", "RIOT", "CLSK", "BITF", "HUT"}
@@ -546,6 +590,12 @@ def screen_momentum(tickers, sectors, progress_cb=None, is_japan=False):
             else:
                 rs_label = "sector_driven"
 
+            # OBV (On-Balance Volume) analysis
+            obv_slope, obv_divergence = compute_obv(close, volume)
+
+            # Drawdown analysis (3-month lookback)
+            max_drawdown_3m, current_drawdown = compute_drawdown(close)
+
             # Sprint 3: quality score (computed from raw OHLCV here while df is in scope)
             _quality = quality_service.compute_quality(
                 df=df,
@@ -591,6 +641,11 @@ def screen_momentum(tickers, sectors, progress_cb=None, is_japan=False):
                 "ema_stack": ema_stack,
                 "days_above_ema9": days_above_ema9,
                 "ema9_score": _ema9_score,
+                # OBV & Drawdown
+                "obv_slope": obv_slope,
+                "obv_divergence": obv_divergence,
+                "max_drawdown_3m": max_drawdown_3m,
+                "current_drawdown": current_drawdown,
                 # Sprint 3 quality (earnings_days not yet available here)
                 "_quality_components": _quality["quality_components"],
                 "_quality_base_score": _quality["quality_score"],
@@ -716,6 +771,54 @@ def compute_sector_rotation(results, benchmark_returns, is_japan=False):
 
     rotation.sort(key=lambda x: x["ret_1m_avg"], reverse=True)
     return rotation
+
+
+def compute_sector_correlations(data, results):
+    """Compute correlation matrix of daily returns between sectors.
+
+    Returns: {"sectors": [str], "matrix": [[float]]} or None if insufficient data.
+    """
+    # Group tickers by sector
+    sector_tickers = {}
+    for r in results:
+        s = r.get("sector", "Unknown")
+        if not s:
+            continue
+        sector_tickers.setdefault(s, []).append(r["ticker"])
+
+    # Filter sectors with at least 3 stocks for meaningful correlation
+    sector_tickers = {s: ts for s, ts in sector_tickers.items() if len(ts) >= 3}
+    if len(sector_tickers) < 3:
+        return None
+
+    # Compute average daily return per sector
+    sector_returns = {}
+    for sector, ts in sector_tickers.items():
+        daily_rets = []
+        for t in ts:
+            try:
+                if len(results) > 1:
+                    close = data[t]["Close"].dropna()
+                else:
+                    close = data["Close"].dropna()
+                if len(close) >= 60:
+                    daily_rets.append(close.pct_change().iloc[-60:])
+            except Exception:
+                continue
+        if len(daily_rets) >= 2:
+            sector_avg = pd.concat(daily_rets, axis=1).mean(axis=1)
+            sector_returns[sector] = sector_avg
+
+    if len(sector_returns) < 3:
+        return None
+
+    df_sectors = pd.DataFrame(sector_returns).dropna()
+    corr = df_sectors.corr()
+
+    sectors_list = list(corr.columns)
+    matrix = [[round(float(corr.iloc[i, j]), 3) for j in range(len(sectors_list))] for i in range(len(sectors_list))]
+
+    return {"sectors": sectors_list, "matrix": matrix}
 
 
 def compute_momentum_score(results):
@@ -1522,6 +1625,10 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
                 "ema_stack": bool(row.get("ema_stack", False)),
                 "days_above_ema9": row.get("days_above_ema9", 0),
                 "ema9_score": row.get("ema9_score", 0),
+                "obv_slope": row.get("obv_slope", 0),
+                "obv_divergence": row.get("obv_divergence", "none"),
+                "max_drawdown_3m": row.get("max_drawdown_3m"),
+                "current_drawdown": row.get("current_drawdown"),
             },
             "fundamentals": {
                 "market_cap_b": fund.get("market_cap_b"),
@@ -1715,6 +1822,12 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
     benchmark_rets = _get_benchmark_returns(sectors_used, start_date=datetime.now() - timedelta(days=400), end_date=datetime.now(), is_japan=is_japan)
     sector_rotation = compute_sector_rotation(results, benchmark_rets, is_japan=is_japan)
 
+    # Sector correlation matrix
+    try:
+        sector_correlations = compute_sector_correlations(price_data, results)
+    except Exception:
+        sector_correlations = None
+
     # Sector summary from all screened results
     sector_counts = {}
     for r in results:
@@ -1781,6 +1894,7 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
         "momentum_ranking": ranking,
         "value_gap_ranking": value_gap_ranking[:20],
         "sector_rotation": sector_rotation,
+        "sector_correlations": sector_correlations,
         "breakout_ranking": breakout_ranking,
         "time_arb_ranking": time_arb_ranking,
         "smallcap_ranking": smallcap_ranking,

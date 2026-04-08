@@ -221,6 +221,11 @@ def init_db():
         _add_column_if_missing(conn, "screening_results", "seed_score", "REAL")
         _add_column_if_missing(conn, "screening_results", "capital_score", "REAL")
         _add_column_if_missing(conn, "screening_results", "capital_grade", "TEXT")
+        # OBV & Drawdown analysis
+        _add_column_if_missing(conn, "screening_results", "obv_slope", "REAL")
+        _add_column_if_missing(conn, "screening_results", "obv_divergence", "TEXT")
+        _add_column_if_missing(conn, "screening_results", "max_drawdown_3m", "REAL")
+        _add_column_if_missing(conn, "screening_results", "current_drawdown", "REAL")
 
     conn.close()
 
@@ -269,8 +274,9 @@ def save_results(session_id, ranking):
                     high_52w, low_52w, dist_from_high, bb_width,
                     earnings_date, days_to_earnings,
                     quality_score, entry_difficulty,
-                    seed_score, capital_score, capital_grade
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    seed_score, capital_score, capital_grade,
+                    obv_slope, obv_divergence, max_drawdown_3m, current_drawdown
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     session_id, r.get("rank"), r.get("ticker"), r.get("name"),
                     r.get("sector"), r.get("price"), r.get("momentum_score"),
@@ -292,6 +298,8 @@ def save_results(session_id, ranking):
                     f.get("earnings_date"), f.get("days_to_earnings"),
                     r.get("quality_score"), r.get("entry_difficulty"),
                     r.get("seed_score"), r.get("capital_score"), r.get("capital_grade"),
+                    t.get("obv_slope"), t.get("obv_divergence"),
+                    t.get("max_drawdown_3m"), t.get("current_drawdown"),
                 ),
             )
             result_id = cur.lastrowid
