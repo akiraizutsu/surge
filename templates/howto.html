@@ -83,6 +83,7 @@
         <a href="#quality"     class="toc-link block py-1 pl-3">└ 品質マトリクス</a>
         <a href="#seed"        class="toc-link block py-1 pl-3">└ 種まき度（日本株）</a>
         <a href="#usadvanced"  class="toc-link block py-1 pl-3">└ 米国株分析</a>
+        <a href="#correlation" class="toc-link block py-1 pl-3">└ セクター相関</a>
         <a href="#regime"      class="toc-link block py-1">市場レジーム</a>
         <a href="#report"      class="toc-link block py-1">日次レポート</a>
         <a href="#notify"      class="toc-link block py-1">変化通知</a>
@@ -91,6 +92,9 @@
         <a href="#backtest"    class="toc-link block py-1">バックテスト</a>
         <a href="#watchlist"   class="toc-link block py-1">ウォッチリスト</a>
         <a href="#history"     class="toc-link block py-1">履歴</a>
+        <a href="#compare"     class="toc-link block py-1">銘柄比較</a>
+        <a href="#alertbuilder" class="toc-link block py-1">アラートビルダー</a>
+        <a href="#tools"       class="toc-link block py-1">便利ツール</a>
         <a href="#customize"   class="toc-link block py-1">カスタマイズ</a>
         <a href="#rs"          class="toc-link block py-1">相対強度 (RS) 判定</a>
         <a href="#disclaimer"  class="toc-link block py-1">免責事項</a>
@@ -207,6 +211,11 @@
                 <li><span class="badge bg-sky-50 dark:bg-sky-900/20 text-sky-600">52W</span> 52週高値ブレイクアウト</li>
                 <li><span class="badge bg-teal-100 dark:bg-teal-900/30 text-teal-700">NEW</span> 前回から新規ランクイン</li>
                 <li><span class="badge bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700">↑+N</span> 前回比スコア急上昇</li>
+                <li><span class="badge bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600">OBV↑乖離</span> 出来高が価格上昇を先行示唆</li>
+                <li><span class="badge bg-rose-50 dark:bg-rose-900/20 text-rose-500">OBV↓乖離</span> 出来高が価格下落を先行示唆</li>
+                <li><span class="badge bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500">ADX25</span> トレンド強度25以上（明確なトレンド）</li>
+                <li><span class="badge bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600">W9EMA↑</span> 週足9EMA準拠中（米国株のみ）</li>
+                <li><span class="badge bg-rose-100 dark:bg-rose-900/30 text-rose-600">W9EMA割れ</span> 週足9EMA下抜け（米国株のみ）</li>
               </ul>
             </div>
           </div>
@@ -250,6 +259,21 @@
               <p class="text-xs text-slate-500 dark:text-gray-400">中期も短期も弱い。資金が流出中</p>
             </div>
           </div>
+        </div>
+
+        <!-- Sector Correlation -->
+        <div id="correlation" class="section-anchor bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 mb-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="badge bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">セクター相関</span>
+            <span class="text-xs text-slate-400">日本株・米国株 共通</span>
+          </div>
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-2">直近60営業日の日次リターンに基づくセクター間の相関係数をヒートマップで表示。</p>
+          <ul class="text-sm text-slate-600 dark:text-gray-300 space-y-1">
+            <li>• <strong>正の相関（赤）:</strong> 同じ方向に動きやすい → 分散効果が低い</li>
+            <li>• <strong>無相関（グレー）:</strong> 独立した動き → 分散効果が高い</li>
+            <li>• <strong>負の相関（青）:</strong> 逆方向に動きやすい → ヘッジ効果あり</li>
+            <li>• セクター内に3銘柄以上ある場合のみ表示</li>
+          </ul>
         </div>
 
         <!-- Breakout -->
@@ -384,9 +408,12 @@
               <li>• 種まき度スコア（日本株・スコア20以上の場合表示）</li>
               <li>• 資本配分スコア（ROE・ROIC・配当性向・自社株買い）</li>
               <li>• AI自動解説（タグ・投資チェック質問）</li>
+              <li>• <strong>サポート/レジスタンス:</strong> S1-S3 / R1-R3 の自動検出レベル</li>
             </ul>
             <ul class="space-y-1">
               <li>• テクニカル指標（RSI・MACD・BB・52W高安値）</li>
+              <li>• <strong>OBV</strong>（スロープ + 乖離判定）、<strong>ADX</strong>（トレンド強度）</li>
+              <li>• <strong>ドローダウン</strong>（3M最大DD・現在DD）</li>
               <li>• ファンダメンタルズ（PER・PBR・EPS・配当利回り）</li>
               <li>• ショートスクイーズ分析（米国株のみ）</li>
               <li>• スコア内訳グラフ（各指標の貢献度）</li>
@@ -439,7 +466,7 @@
         <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">ウォッチリスト</h2>
         <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
           <ul class="text-sm text-slate-600 dark:text-gray-300 space-y-2">
-            <li>• 各行の「☆」をクリックで登録 / 「★」で解除</li>
+            <li>• 各行の「☆」をクリックで登録 / 「★」で解除（削除時は確認ダイアログあり）</li>
             <li>• 「★ ウォッチリスト」ボタンでウォッチリスト銘柄のみにフィルタ</li>
             <li>• ウォッチリスト登録銘柄の変化は🔔で優先通知される</li>
             <li>• インデックスをまたいで登録可能（日経225と米国株を同時管理）</li>
@@ -457,6 +484,64 @@
             <li>• 選択したセッションからバックテストを実行可能</li>
             <li>• 結果はサーバー再起動後も保持される（SQLite永続化）</li>
           </ul>
+        </div>
+      </section>
+
+      <!-- Compare -->
+      <section id="compare" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">銘柄比較モード</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-3">テーブルの各行にあるチェックボックスで2〜3銘柄を選択すると、右下に「比較」フローティングボタンが表示される。</p>
+          <ul class="text-sm text-slate-600 dark:text-gray-300 space-y-1">
+            <li>• 18種類の指標（スコア・RSI・1M/3M・ADX・OBV・DD等）を横並びで比較</li>
+            <li>• 各行で最良の値が緑色にハイライトされる</li>
+            <li>• 「リセット」で選択をクリア</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Alert Builder -->
+      <section id="alertbuilder" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">アラートビルダー（⚡）</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-3">ツールバーの⚡ボタンから起動。カスタム条件を設定し、スクリーニング結果に自動マッチングする。</p>
+          <ul class="text-sm text-slate-600 dark:text-gray-300 space-y-1">
+            <li>• 指標（RSI / スコア / 1M / 出来高比 / ADX / 最大DD）× 比較演算子 × 値 を設定</li>
+            <li>• 複数の条件を追加可能（OR条件）</li>
+            <li>• 条件はlocalStorageに保存され、スクリーニング完了時に自動チェック</li>
+            <li>• 一致する銘柄がサマリーカード下に表示される</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Tools -->
+      <section id="tools" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">便利ツール</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 space-y-4">
+          <div>
+            <p class="font-semibold text-sm mb-1">CSVエクスポート</p>
+            <p class="text-sm text-slate-500 dark:text-gray-400">テーブル右上の「CSV」ボタンでランキングデータをダウンロード。16列（Rank / Ticker / Score / RSI / OBV / DD 等）をExcel対応形式で出力。</p>
+          </div>
+          <div>
+            <p class="font-semibold text-sm mb-1">列カスタマイズ</p>
+            <p class="text-sm text-slate-500 dark:text-gray-400">テーブル右上の「列」ボタンで表示列を切替。1D / 1W / 1M / 3M / RSI / 出来高比 / RS1M / RS3M の表示/非表示をトグル。設定はブラウザに保存される。</p>
+          </div>
+          <div>
+            <p class="font-semibold text-sm mb-1">スパークライン</p>
+            <p class="text-sm text-slate-500 dark:text-gray-400">テーブルの銘柄名の横にミニチャートが表示される（sm以上の画面幅）。緑=上昇トレンド / 赤=下落トレンドで一目でパターン把握可能。</p>
+          </div>
+          <div>
+            <p class="font-semibold text-sm mb-1">スクリーニングETA</p>
+            <p class="text-sm text-slate-500 dark:text-gray-400">スクリーニング実行中にプログレスバーの横に「残り約○分○秒」を表示。直近5回のポーリングレートから移動平均で推定。</p>
+          </div>
+          <div>
+            <p class="font-semibold text-sm mb-1">ブラウザ通知</p>
+            <p class="text-sm text-slate-500 dark:text-gray-400">スクリーニング完了時にブラウザのNotification APIで通知。別タブで作業中でも見逃さない。初回実行時に通知許可が求められる。</p>
+          </div>
+          <div>
+            <p class="font-semibold text-sm mb-1">エラーリカバリー</p>
+            <p class="text-sm text-slate-500 dark:text-gray-400">スクリーニングが失敗した場合、エラーメッセージと「再試行」ボタンが表示される。前回のstale状態も自動回復。</p>
+          </div>
         </div>
       </section>
 
@@ -479,6 +564,10 @@
           <div>
             <p class="font-semibold text-sm mb-1">表示銘柄数</p>
             <p class="text-sm text-slate-500 dark:text-gray-400">上位 10 / 20 / 30 / 50 銘柄から選択可能。</p>
+          </div>
+          <div>
+            <p class="font-semibold text-sm mb-1">ソート設定の永続化</p>
+            <p class="text-sm text-slate-500 dark:text-gray-400">テーブルヘッダーをクリックしてソートした設定（キーと方向）はブラウザに保存され、ページ再読み込み後も維持される。</p>
           </div>
         </div>
       </section>
