@@ -535,6 +535,13 @@ def get_latest_sessions_by_index():
                     "is_breakout": (r["dist_from_high"] or -999) >= -1 if "dist_from_high" in r.keys() else False,
                     "bb_width": r["bb_width"] if "bb_width" in r.keys() else None,
                     "bb_squeeze": (r["bb_width"] or 999) < 6 if "bb_width" in r.keys() else False,
+                    "obv_slope": r["obv_slope"] if "obv_slope" in r.keys() else 0,
+                    "obv_divergence": r["obv_divergence"] if "obv_divergence" in r.keys() else "none",
+                    "max_drawdown_3m": r["max_drawdown_3m"] if "max_drawdown_3m" in r.keys() else None,
+                    "current_drawdown": r["current_drawdown"] if "current_drawdown" in r.keys() else None,
+                    "adx": r["adx"] if "adx" in r.keys() else 0,
+                    "support_levels": [],
+                    "resistance_levels": [],
                 },
                 "fundamentals": {
                     "market_cap_b": r["market_cap_b"], "pe_trailing": r["pe_trailing"],
@@ -605,6 +612,55 @@ def get_latest_sessions_by_index():
         except Exception:
             pass
 
+        # Rebuild derived rankings from momentum_ranking data
+        breakout_ranking = [r for r in ranking
+            if r["technicals"].get("is_breakout") or r["technicals"].get("bb_squeeze")]
+
+        # Rebuild sector rotation from ranking
+        _sect_data = {}
+        for r in ranking:
+            s = r.get("sector") or "Unknown"
+            _sect_data.setdefault(s, {"ret_1m": [], "ret_3m": [], "rs_1m": [], "count": 0})
+            _sect_data[s]["count"] += 1
+            if r["technicals"].get("ret_1m") is not None:
+                _sect_data[s]["ret_1m"].append(r["technicals"]["ret_1m"])
+            if r["technicals"].get("ret_3m") is not None:
+                _sect_data[s]["ret_3m"].append(r["technicals"]["ret_3m"])
+            if r["technicals"].get("rs_1m") is not None:
+                _sect_data[s]["rs_1m"].append(r["technicals"]["rs_1m"])
+        sector_rotation = []
+        for s, v in _sect_data.items():
+            if not v["ret_1m"]:
+                continue
+            r1m = round(sum(v["ret_1m"]) / len(v["ret_1m"]), 2)
+            r3m = round(sum(v["ret_3m"]) / len(v["ret_3m"]), 2) if v["ret_3m"] else 0
+            rs1m = round(sum(v["rs_1m"]) / len(v["rs_1m"]), 2) if v["rs_1m"] else 0
+            if r1m > 0 and r3m > 0:
+                trend = "加速" if r1m > r3m / 3 else "安定"
+            elif r1m > 0:
+                trend = "回復"
+            elif r3m > 0:
+                trend = "減速"
+            else:
+                trend = "衰退"
+            sector_rotation.append({
+                "sector": s, "etf": r["technicals"].get("sector_etf", "SPY"),
+                "ret_1m_avg": r1m, "ret_3m_avg": r3m, "etf_1m": 0, "etf_3m": 0,
+                "rs_1m_avg": rs1m, "stock_count": v["count"], "trend": trend,
+            })
+        sector_rotation.sort(key=lambda x: x["ret_1m_avg"], reverse=True)
+
+        is_japan = idx in ("nikkei225", "growth250")
+        # Rebuild seed/smallcap/time_arb from ranking (Japan only)
+        seed_ranking = sorted(
+            [r for r in ranking if r.get("seed_score") and r["seed_score"] >= 20],
+            key=lambda x: x.get("seed_score", 0), reverse=True
+        )[:20] if is_japan else []
+
+        smallcap_ranking = [r for r in ranking
+            if r.get("fundamentals", {}).get("market_cap_b") is not None
+            and 1 <= (r["fundamentals"]["market_cap_b"] or 0) <= 30] if is_japan else []
+
         index_label = {"sp500": "S&P 500", "nasdaq100": "NASDAQ 100", "nikkei225": "日経225", "growth250": "グロース250"}.get(idx, idx)
         results[idx] = {
             "index": index_label,
@@ -612,10 +668,11 @@ def get_latest_sessions_by_index():
             "generated_at": session["generated_at"],
             "momentum_ranking": ranking,
             "value_gap_ranking": vg_ranking,
-            "sector_rotation": [],
-            "breakout_ranking": [],
+            "sector_rotation": sector_rotation,
+            "breakout_ranking": breakout_ranking,
             "time_arb_ranking": [],
-            "smallcap_ranking": [],
+            "smallcap_ranking": smallcap_ranking,
+            "seed_ranking": seed_ranking,
             "sector_distribution": sector_dist,
             "summary": {
                 "avg_score": avg_score,
