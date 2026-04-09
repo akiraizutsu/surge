@@ -260,11 +260,12 @@ function pollProgress() {
             const preferred = window.IS_JAPAN_PAGE
               ? ['nikkei225', 'growth250']
               : ['sp500', 'nasdaq100'];
-            const firstKey = preferred.find(k => allResults[k]) || Object.keys(allResults)[0];
+            const firstKey = preferred.find(k => allResults[k]);
             if (firstKey) {
               activeTab = firstKey;
               switchTab(firstKey);
             }
+            // No fallback to other page's indices
           }
           document.getElementById('progressArea').classList.add('hidden');
           // Browser notification on success
@@ -1874,14 +1875,22 @@ async function init() {
         const keys = Object.keys(allResults);
         if (keys.length > 0) {
           document.getElementById('indexTabs').classList.remove('hidden');
+          // Only show tabs relevant to this page
+          const pageIndices = window.IS_JAPAN_PAGE
+            ? ['nikkei225', 'growth250']
+            : ['sp500', 'nasdaq100'];
           if (allResults[activeTab]) {
             switchTab(activeTab);
           } else {
-            const preferred = window.IS_JAPAN_PAGE
-              ? ['nikkei225', 'growth250']
-              : ['sp500', 'nasdaq100'];
-            const firstKey = preferred.find(k => allResults[k]) || keys[0];
-            switchTab(firstKey);
+            const firstKey = pageIndices.find(k => allResults[k]);
+            if (firstKey) {
+              switchTab(firstKey);
+            } else {
+              // No data for this page's indices — show empty state
+              hidePageLoader();
+              document.getElementById('emptyState')?.classList.remove('hidden');
+              return;
+            }
           }
           hidePageLoader();
           return; // Data loaded, don't show empty state
