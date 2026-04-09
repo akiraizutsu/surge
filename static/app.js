@@ -106,6 +106,15 @@ function switchTab(idx) {
     screeningData = data;
     renderDashboard(data);
     document.getElementById('statusText').textContent = '最終更新: ' + data.generated_at;
+  } else {
+    // No data for this index — show message instead of stale data
+    screeningData = null;
+    document.getElementById('summaryCards')?.classList.add('hidden');
+    document.getElementById('chartsArea')?.classList.add('hidden');
+    document.getElementById('subTabs')?.classList.add('hidden');
+    document.getElementById('tableArea')?.classList.add('hidden');
+    document.getElementById('weightPresetBar')?.classList.add('hidden');
+    document.getElementById('statusText').textContent = `${idx.toUpperCase()} のデータがありません。スクリーニングを実行してください。`;
   }
 }
 
