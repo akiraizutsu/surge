@@ -2854,6 +2854,7 @@ function checkAlerts(ranking) {
 let currentUser = null;
 let chatHistory = [];
 let chatIsStreaming = false;
+let chatIsComposing = false;  // Tracks Japanese IME composition state
 let chatProMode = localStorage.getItem('surge-chat-pro-mode') === 'true';
 let notesList = [];
 let lastAssistantAnswer = null;  // For "save to note" feature
@@ -3176,12 +3177,31 @@ function appendToolCallIndicator(name, args) {
   container.scrollTop = container.scrollHeight;
 }
 
+function autoResizeChatInput(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 128) + 'px';
+}
+
+function handleChatInputKeydown(event) {
+  // Only send on Enter without Shift, and only when not composing (Japanese IME)
+  if (event.key !== 'Enter') return;
+  if (event.shiftKey) return;
+  // Guard against IME conversion Enter. Modern browsers expose event.isComposing;
+  // we also track our own chatIsComposing flag for Safari/iOS consistency.
+  if (event.isComposing || chatIsComposing || event.keyCode === 229) return;
+  if (chatIsStreaming) return;
+  event.preventDefault();
+  sendChatMessage();
+}
+
 async function sendChatMessage() {
   if (chatIsStreaming) return;
   const input = document.getElementById('chatInput');
   const message = input.value.trim();
   if (!message) return;
   input.value = '';
+  // Reset textarea height after sending
+  input.style.height = 'auto';
 
   appendChatMessage('user', message);
   chatHistory.push({ role: 'user', content: message });
