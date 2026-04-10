@@ -2880,6 +2880,59 @@ let lastAssistantToolCalls = [];
   });
 })();
 
+// ── Body scroll lock via MutationObserver ────────────────────────────
+// Watches for modal open/close state changes and locks the viewport.
+// Strategy: save scrollY, set body position:fixed at -scrollY. On unlock,
+// restore scrollY. Works across all browsers including iOS Safari.
+
+let _lockedScrollY = 0;
+let _isScrollLocked = false;
+const _LOCK_EXCLUDE_IDS = new Set(['bgGrid', 'pageLoader']);
+
+function lockBodyScroll() {
+  if (_isScrollLocked) return;
+  _lockedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  document.documentElement.classList.add('modal-open');
+  document.body.classList.add('modal-open');
+  document.body.style.top = `-${_lockedScrollY}px`;
+  document.body.style.position = 'fixed';
+  document.body.style.width = '100%';
+  _isScrollLocked = true;
+}
+
+function unlockBodyScroll() {
+  if (!_isScrollLocked) return;
+  document.documentElement.classList.remove('modal-open');
+  document.body.classList.remove('modal-open');
+  document.body.style.top = '';
+  document.body.style.position = '';
+  document.body.style.width = '';
+  _isScrollLocked = false;
+  window.scrollTo(0, _lockedScrollY);
+}
+
+function updateModalScrollLock() {
+  const anyOpen = Array.from(document.querySelectorAll('.fixed.inset-0')).some(el => {
+    if (_LOCK_EXCLUDE_IDS.has(el.id)) return false;
+    if (el.classList.contains('hidden')) return false;
+    if (el.classList.contains('pointer-events-none')) return false;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none') return false;
+    const zIdx = parseInt(cs.zIndex, 10);
+    if (!isNaN(zIdx) && zIdx < 40) return false;
+    return true;
+  });
+  const hasDynamicOverlay = !!document.getElementById('alertBuilderOverlay');
+  const shouldLock = anyOpen || hasDynamicOverlay;
+  if (shouldLock) lockBodyScroll();
+  else unlockBodyScroll();
+}
+
+// Poll for modal state changes every 100ms. Simple and reliable.
+// Also run once on load to catch any initially-visible state.
+setInterval(updateModalScrollLock, 100);
+updateModalScrollLock();
+
 async function fetchCurrentUser() {
   try {
     const resp = await fetch('/api/auth/me');
