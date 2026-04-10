@@ -20,6 +20,7 @@ import requests
 import yfinance as yf
 
 from screener import run_screening
+import database
 from database import (
     init_db, save_session, save_results, save_value_gap_results,
     get_sessions, get_session_results,
@@ -38,6 +39,15 @@ from scoring_service import WEIGHT_PRESETS
 import capital_allocation_service
 import us_advanced_service
 import data_quality_service
+import auth_service
+from auth_service import (
+    current_user, current_user_id, is_owner,
+    login_required, owner_required,
+    verify_login, login_session, logout_session,
+)
+import notes_service
+import rate_limit_service
+import llm_service
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "surge-dev-fallback-key-change-in-prod")
@@ -48,13 +58,16 @@ init_db()
 
 @app.before_request
 def require_login():
-    """Block unauthenticated access to all routes except /login, /static, and health check."""
+    """Block unauthenticated access. Uses new per-user auth from auth_service.
+
+    Exempt: /login, /logout, /static/*, and the Railway health check /api/status.
+    """
     if request.endpoint in ("login", "logout", "static"):
         return
     # Allow Railway health check to pass without auth
     if request.path == "/api/status":
         return
-    if not session.get("authenticated"):
+    if "user_id" not in session:
         if request.path.startswith("/api/"):
             return jsonify({"error": "Unauthorized"}), 401
         return redirect(url_for("login"))
@@ -64,20 +77,206 @@ def require_login():
 def login():
     error = None
     if request.method == "POST":
+        username = request.form.get("username", "").strip()
         pw = request.form.get("password", "")
-        correct = os.environ.get("SURGE_PASSWORD", "")
-        if correct and pw == correct:
-            session["authenticated"] = True
-            session.permanent = True
+        user = verify_login(username, pw)
+        if user:
+            login_session(user)
             return redirect(url_for("japan"))
-        error = "パスワードが違います"
+        error = "ユーザー名またはパスワードが違います"
     return render_template("login.html", error=error)
 
 
 @app.route("/logout")
 def logout():
-    session.clear()
+    logout_session()
     return redirect(url_for("login"))
+
+
+# ── Auth API ──────────────────────────────────────────────────────────────
+
+@app.get("/api/auth/me")
+def api_auth_me():
+    user = current_user()
+    if not user:
+        return jsonify({"error": "not logged in"}), 401
+    return jsonify(user)
+
+
+@app.post("/api/auth/consent")
+def api_auth_consent():
+    uid = current_user_id()
+    if uid is None:
+        return jsonify({"error": "not logged in"}), 401
+    auth_service.set_consent(uid)
+    return jsonify({"status": "ok"})
+
+
+@app.post("/api/auth/change_password")
+def api_auth_change_password():
+    uid = current_user_id()
+    if uid is None:
+        return jsonify({"error": "not logged in"}), 401
+    data = request.get_json(silent=True) or {}
+    current = data.get("current", "")
+    new_pw = data.get("new", "")
+    if len(new_pw) < 4:
+        return jsonify({"error": "new password too short"}), 400
+    ok = auth_service.change_password(uid, current, new_pw)
+    if not ok:
+        return jsonify({"error": "current password incorrect"}), 400
+    return jsonify({"status": "ok"})
+
+
+# ── Research Notes API ────────────────────────────────────────────────────
+
+@app.get("/api/notes")
+def api_list_notes():
+    uid = current_user_id()
+    ticker = request.args.get("ticker")
+    pinned = request.args.get("pinned", "0") == "1"
+    limit = request.args.get("limit", 50, type=int)
+    notes = notes_service.list_user_notes(
+        user_id=uid, ticker=ticker, pinned_only=pinned, limit=limit
+    )
+    return jsonify(notes)
+
+
+@app.post("/api/notes")
+def api_create_note():
+    uid = current_user_id()
+    data = request.get_json(silent=True) or {}
+    title = (data.get("title") or "").strip()
+    answer = (data.get("answer") or "").strip()
+    if not title or not answer:
+        return jsonify({"error": "title and answer are required"}), 400
+    note_id = notes_service.create_note(
+        user_id=uid,
+        title=title,
+        question=data.get("question", ""),
+        answer=answer,
+        tickers=data.get("tickers"),
+        tags=data.get("tags"),
+        index_name=data.get("index_name"),
+        llm_model=data.get("llm_model"),
+        tool_calls=data.get("tool_calls"),
+    )
+    if not note_id:
+        return jsonify({"error": "failed to create note"}), 500
+    return jsonify({"id": note_id, "status": "created"}), 201
+
+
+@app.get("/api/notes/<int:note_id>")
+def api_get_note(note_id):
+    uid = current_user_id()
+    note = notes_service.get_note(note_id, uid)
+    if not note:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(note)
+
+
+@app.patch("/api/notes/<int:note_id>")
+def api_update_note(note_id):
+    uid = current_user_id()
+    data = request.get_json(silent=True) or {}
+    allowed_keys = {"title", "question", "answer", "tickers", "tags", "is_pinned"}
+    updates = {k: v for k, v in data.items() if k in allowed_keys}
+    if not updates:
+        return jsonify({"error": "no valid fields"}), 400
+    ok = notes_service.update_note(note_id, uid, **updates)
+    if not ok:
+        return jsonify({"error": "not found or not updated"}), 404
+    return jsonify({"status": "ok"})
+
+
+@app.delete("/api/notes/<int:note_id>")
+def api_delete_note(note_id):
+    uid = current_user_id()
+    ok = notes_service.delete_note(note_id, uid)
+    if not ok:
+        return jsonify({"error": "not found"}), 404
+    return jsonify({"status": "deleted"})
+
+
+@app.post("/api/notes/<int:note_id>/pin")
+def api_toggle_pin(note_id):
+    uid = current_user_id()
+    ok = notes_service.toggle_pin(note_id, uid)
+    if not ok:
+        return jsonify({"error": "not found"}), 404
+    return jsonify({"status": "ok"})
+
+
+# ── LLM Chat API ───────────────────────────────────────────────────────────
+
+@app.get("/api/chat/usage")
+def api_chat_usage():
+    uid = current_user_id()
+    if uid is None:
+        return jsonify({"error": "not logged in"}), 401
+    usage = rate_limit_service.get_usage_today(uid)
+    return jsonify(usage)
+
+
+@app.post("/api/chat")
+def api_chat():
+    """Streaming chat endpoint. Returns NDJSON (one JSON object per line)."""
+    uid = current_user_id()
+    if uid is None:
+        return jsonify({"error": "not logged in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    message = (data.get("message") or "").strip()
+    history = data.get("history") or []
+    use_pro = bool(data.get("use_pro", False))
+
+    if not message:
+        return jsonify({"error": "message is required"}), 400
+
+    def generate():
+        try:
+            ai = llm_service.AnalystAI(user_id=uid)
+            # Block non-owner Pro mode attempts
+            if use_pro and not ai.is_owner:
+                yield json.dumps({"type": "error", "error": "Pro mode is owner only"}, ensure_ascii=False) + "\n"
+                return
+            for chunk in ai.chat_stream(message, history=history, use_pro=use_pro):
+                yield json.dumps(chunk, ensure_ascii=False) + "\n"
+        except Exception as e:
+            yield json.dumps({"type": "error", "error": f"chat failed: {type(e).__name__}: {e}"}, ensure_ascii=False) + "\n"
+
+    return app.response_class(
+        generate(),
+        mimetype="application/x-ndjson",
+        headers={
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache",
+        },
+    )
+
+
+# ── Admin API (owner only) ─────────────────────────────────────────────
+
+@app.get("/api/admin/users")
+def api_admin_users():
+    if not is_owner():
+        return jsonify({"error": "owner only"}), 403
+    return jsonify(auth_service.list_all_users())
+
+
+@app.get("/api/admin/usage")
+def api_admin_usage():
+    if not is_owner():
+        return jsonify({"error": "owner only"}), 403
+    from datetime import datetime, timezone, timedelta
+    jst = timezone(timedelta(hours=9))
+    today = datetime.now(jst).strftime("%Y-%m-%d")
+    return jsonify({
+        "date": today,
+        "users": database.get_all_users_usage(today),
+        "global": rate_limit_service.get_global_cost_summary(),
+    })
+
 
 ALL_INDICES = ["sp500", "nasdaq100", "nikkei225"]
 
@@ -384,11 +583,11 @@ def stock_explain(ticker):
     return jsonify({"error": f"{ticker} not found in recent screening results"}), 404
 
 
-# ── Watchlist ──
+# ── Watchlist (per-user) ──
 
 @app.get("/api/watchlist")
 def api_get_watchlist():
-    return jsonify(get_watchlist())
+    return jsonify(get_watchlist(user_id=current_user_id()))
 
 
 @app.post("/api/watchlist")
@@ -397,13 +596,13 @@ def api_add_watchlist():
     ticker = data.get("ticker", "").strip().upper()
     if not ticker:
         return jsonify({"error": "ticker is required"}), 400
-    add_to_watchlist(ticker)
+    add_to_watchlist(ticker, user_id=current_user_id())
     return jsonify({"status": "added", "ticker": ticker}), 201
 
 
 @app.delete("/api/watchlist/<ticker>")
 def api_remove_watchlist(ticker):
-    remove_from_watchlist(ticker.upper())
+    remove_from_watchlist(ticker.upper(), user_id=current_user_id())
     return jsonify({"status": "removed", "ticker": ticker.upper()})
 
 

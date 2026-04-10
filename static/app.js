@@ -2847,4 +2847,484 @@ function checkAlerts(ranking) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// LLM Phase 1: User menu, Chat, Notes
+// ═══════════════════════════════════════════════════════════════════════
+
+let currentUser = null;
+let chatHistory = [];
+let chatIsStreaming = false;
+let chatProMode = localStorage.getItem('surge-chat-pro-mode') === 'true';
+let notesList = [];
+let lastAssistantAnswer = null;  // For "save to note" feature
+let lastAssistantQuestion = null;
+let lastAssistantToolCalls = [];
+
+async function fetchCurrentUser() {
+  try {
+    const resp = await fetch('/api/auth/me');
+    if (!resp.ok) return null;
+    currentUser = await resp.json();
+    updateUserMenuUI();
+    // Show consent modal if needed
+    if (!currentUser.consent_given_at) {
+      document.getElementById('consentModal')?.classList.remove('hidden');
+      document.getElementById('consentModal')?.classList.add('flex');
+    }
+    // Show Pro mode toggle for owner
+    if (currentUser.role === 'owner') {
+      const toggle = document.getElementById('proModeToggle');
+      if (toggle) {
+        toggle.classList.remove('hidden');
+        toggle.classList.add('flex');
+      }
+      document.getElementById('proModeCheckbox').checked = chatProMode;
+      updateChatModelBadge();
+    }
+    return currentUser;
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+function updateUserMenuUI() {
+  if (!currentUser) return;
+  const avatarEl = document.getElementById('userAvatar');
+  const nameEl = document.getElementById('userDisplayName');
+  const dropNameEl = document.getElementById('userDropdownName');
+  const dropRoleEl = document.getElementById('userDropdownRole');
+  if (avatarEl) avatarEl.textContent = currentUser.avatar_emoji || '👤';
+  if (nameEl) nameEl.textContent = currentUser.display_name || currentUser.username;
+  if (dropNameEl) dropNameEl.textContent = currentUser.display_name || currentUser.username;
+  if (dropRoleEl) dropRoleEl.textContent = currentUser.role === 'owner' ? '(owner)' : '';
+}
+
+function toggleUserMenu(e) {
+  if (e) e.stopPropagation();
+  document.getElementById('userDropdown')?.classList.toggle('hidden');
+}
+// Close dropdown on outside click
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('userMenuWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('userDropdown')?.classList.add('hidden');
+  }
+});
+
+async function submitConsent() {
+  try {
+    await fetch('/api/auth/consent', { method: 'POST' });
+    if (currentUser) currentUser.consent_given_at = new Date().toISOString();
+  } catch (e) {}
+  document.getElementById('consentModal')?.classList.add('hidden');
+  document.getElementById('consentModal')?.classList.remove('flex');
+}
+
+function showChangePasswordDialog() {
+  document.getElementById('userDropdown')?.classList.add('hidden');
+  document.getElementById('currentPwInput').value = '';
+  document.getElementById('newPwInput').value = '';
+  document.getElementById('changePwError').classList.add('hidden');
+  document.getElementById('changePasswordDialog').classList.remove('hidden');
+  document.getElementById('changePasswordDialog').classList.add('flex');
+}
+
+function closeChangePasswordDialog() {
+  document.getElementById('changePasswordDialog').classList.add('hidden');
+  document.getElementById('changePasswordDialog').classList.remove('flex');
+}
+
+async function submitChangePassword() {
+  const current = document.getElementById('currentPwInput').value;
+  const newPw = document.getElementById('newPwInput').value;
+  const errEl = document.getElementById('changePwError');
+  if (!current || newPw.length < 4) {
+    errEl.textContent = 'パスワードは4文字以上必要です';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  try {
+    const resp = await fetch('/api/auth/change_password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current, new: newPw }),
+    });
+    const j = await resp.json();
+    if (!resp.ok) {
+      errEl.textContent = j.error || '変更失敗';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    alert('パスワードを変更しました');
+    closeChangePasswordDialog();
+  } catch (e) {
+    errEl.textContent = 'ネットワークエラー';
+    errEl.classList.remove('hidden');
+  }
+}
+
+// ── Chat Drawer ──────────────────────────────────────────────────────
+
+async function openChatDrawer() {
+  document.getElementById('chatDrawer').classList.remove('hidden');
+  document.getElementById('chatDrawer').classList.add('flex');
+  await loadChatUsage();
+  setTimeout(() => document.getElementById('chatInput')?.focus(), 100);
+}
+
+function closeChatDrawer() {
+  document.getElementById('chatDrawer').classList.add('hidden');
+  document.getElementById('chatDrawer').classList.remove('flex');
+}
+
+async function loadChatUsage() {
+  try {
+    const u = await fetch('/api/chat/usage').then(r => r.json());
+    document.getElementById('chatUsageCount').textContent = u.request_count;
+    document.getElementById('chatUsageLimit').textContent = u.limit;
+  } catch (e) {}
+}
+
+function clearChatHistory() {
+  chatHistory = [];
+  document.getElementById('chatMessages').innerHTML = '';
+}
+
+function updateChatModelBadge() {
+  const badge = document.getElementById('chatModelBadge');
+  if (!badge) return;
+  badge.textContent = chatProMode ? 'pro 🔥' : 'flash';
+  badge.className = chatProMode
+    ? 'text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 font-mono'
+    : 'text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 font-mono';
+}
+
+function toggleProMode(e) {
+  chatProMode = e.target.checked;
+  localStorage.setItem('surge-chat-pro-mode', chatProMode);
+  updateChatModelBadge();
+}
+
+function appendChatMessage(role, content, options = {}) {
+  const container = document.getElementById('chatMessages');
+  const msgEl = document.createElement('div');
+  const isUser = role === 'user';
+  msgEl.className = isUser
+    ? 'flex justify-end'
+    : 'flex justify-start';
+  const bubble = document.createElement('div');
+  bubble.className = isUser
+    ? 'max-w-[85%] bg-primary-500 text-white rounded-2xl rounded-tr-md px-4 py-2 text-sm whitespace-pre-wrap break-words'
+    : 'max-w-[90%] bg-slate-100 dark:bg-gray-800 text-slate-900 dark:text-gray-100 rounded-2xl rounded-tl-md px-4 py-2 text-sm whitespace-pre-wrap break-words';
+  bubble.textContent = content;
+  msgEl.appendChild(bubble);
+  if (options.assistantFinal && !isUser) {
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'ml-2 self-end text-[10px] px-2 py-1 rounded-md bg-primary-100 dark:bg-primary-900/40 text-primary-600 dark:text-primary-400 hover:bg-primary-200 dark:hover:bg-primary-900/60 cursor-pointer shrink-0';
+    saveBtn.textContent = '📌 保存';
+    saveBtn.onclick = () => showNoteSaveDialog();
+    msgEl.appendChild(saveBtn);
+  }
+  container.appendChild(msgEl);
+  container.scrollTop = container.scrollHeight;
+  return bubble;
+}
+
+function appendToolCallIndicator(name, args) {
+  const container = document.getElementById('chatMessages');
+  const el = document.createElement('div');
+  el.className = 'flex justify-start';
+  const badge = document.createElement('div');
+  badge.className = 'text-[10px] px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-mono flex items-center gap-1.5';
+  const argsStr = Object.entries(args || {}).map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`).join(', ').slice(0, 60);
+  badge.textContent = `🔧 ${name}(${argsStr})`;
+  el.appendChild(badge);
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendChatMessage() {
+  if (chatIsStreaming) return;
+  const input = document.getElementById('chatInput');
+  const message = input.value.trim();
+  if (!message) return;
+  input.value = '';
+
+  appendChatMessage('user', message);
+  chatHistory.push({ role: 'user', content: message });
+
+  chatIsStreaming = true;
+  document.getElementById('chatSendBtn').disabled = true;
+
+  const toolCallsLog = [];
+  let assistantBubble = null;
+  let assistantText = '';
+
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        history: chatHistory.slice(-10),
+        use_pro: chatProMode,
+      }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: 'unknown error' }));
+      appendChatMessage('assistant', '⚠️ エラー: ' + (err.error || 'request failed'));
+      return;
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let newlineIdx;
+      while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, newlineIdx).trim();
+        buffer = buffer.slice(newlineIdx + 1);
+        if (!line) continue;
+        try {
+          const chunk = JSON.parse(line);
+          if (chunk.type === 'text') {
+            if (!assistantBubble) {
+              assistantBubble = appendChatMessage('assistant', '');
+            }
+            assistantText += chunk.content;
+            assistantBubble.textContent = assistantText;
+          } else if (chunk.type === 'tool_call') {
+            appendToolCallIndicator(chunk.name, chunk.args);
+            toolCallsLog.push({ name: chunk.name, args: chunk.args });
+          } else if (chunk.type === 'tool_result') {
+            // No UI output for results (too verbose), just tracked
+          } else if (chunk.type === 'error') {
+            appendChatMessage('assistant', '⚠️ ' + chunk.error);
+          } else if (chunk.type === 'usage') {
+            // No-op, handled via loadChatUsage at end
+          }
+        } catch (e) {
+          console.warn('Failed to parse chunk:', line);
+        }
+      }
+    }
+
+    if (assistantText) {
+      chatHistory.push({ role: 'model', content: assistantText });
+      lastAssistantAnswer = assistantText;
+      lastAssistantQuestion = message;
+      lastAssistantToolCalls = toolCallsLog;
+      // Append save button to the last bubble
+      if (assistantBubble) {
+        const parent = assistantBubble.parentElement;
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'ml-2 self-end text-[10px] px-2 py-1 rounded-md bg-primary-100 dark:bg-primary-900/40 text-primary-600 dark:text-primary-400 hover:bg-primary-200 dark:hover:bg-primary-900/60 cursor-pointer shrink-0';
+        saveBtn.textContent = '📌 保存';
+        saveBtn.onclick = () => showNoteSaveDialog();
+        parent.appendChild(saveBtn);
+      }
+    }
+  } catch (e) {
+    appendChatMessage('assistant', '⚠️ ネットワークエラー: ' + e.message);
+  } finally {
+    chatIsStreaming = false;
+    document.getElementById('chatSendBtn').disabled = false;
+    await loadChatUsage();
+  }
+}
+
+function extractTickersFromChat(text) {
+  if (!text) return [];
+  const found = new Set();
+  // $AAPL style
+  const dollarRe = /\$([A-Z]{1,5})\b/g;
+  let m;
+  while ((m = dollarRe.exec(text)) !== null) found.add(m[1]);
+  // 7203.T style
+  const jpRe = /\b([0-9]{4}\.T)\b/g;
+  while ((m = jpRe.exec(text)) !== null) found.add(m[1]);
+  return Array.from(found).slice(0, 10);
+}
+
+function showNoteSaveDialog() {
+  if (!lastAssistantAnswer) return;
+  const tickers = extractTickersFromChat((lastAssistantQuestion || '') + '\n' + lastAssistantAnswer);
+  const titleBase = (lastAssistantQuestion || '').replace(/\n/g, ' ').slice(0, 40);
+  const suggestedTitle = tickers.length > 0
+    ? `${tickers[0]}_${titleBase}`
+    : titleBase || '調査ノート';
+  document.getElementById('noteSaveTitle').value = suggestedTitle;
+  document.getElementById('noteSaveTags').value = '';
+  document.getElementById('noteSaveTickers').textContent = tickers.join(', ') || '(なし)';
+  document.getElementById('noteSaveDialog').classList.remove('hidden');
+  document.getElementById('noteSaveDialog').classList.add('flex');
+}
+
+function closeNoteSaveDialog() {
+  document.getElementById('noteSaveDialog').classList.add('hidden');
+  document.getElementById('noteSaveDialog').classList.remove('flex');
+}
+
+async function confirmSaveNote() {
+  const title = document.getElementById('noteSaveTitle').value.trim();
+  const tagsRaw = document.getElementById('noteSaveTags').value.trim();
+  const tags = tagsRaw ? tagsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const tickers = extractTickersFromChat((lastAssistantQuestion || '') + '\n' + lastAssistantAnswer);
+  if (!title) {
+    alert('タイトルを入力してください');
+    return;
+  }
+  try {
+    const resp = await fetch('/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        question: lastAssistantQuestion,
+        answer: lastAssistantAnswer,
+        tickers,
+        tags,
+        index_name: activeTab,
+        llm_model: chatProMode ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+        tool_calls: lastAssistantToolCalls,
+      }),
+    });
+    if (!resp.ok) {
+      alert('保存失敗');
+      return;
+    }
+    closeNoteSaveDialog();
+    // Show brief toast
+    const toast = document.createElement('div');
+    toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] px-4 py-2 bg-emerald-500 text-white rounded-lg shadow-lg text-sm';
+    toast.textContent = '✓ ノートに保存しました';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2000);
+  } catch (e) {
+    alert('保存失敗: ' + e.message);
+  }
+}
+
+// ── Notes Drawer ─────────────────────────────────────────────────────
+
+async function openNotesDrawer() {
+  document.getElementById('notesDrawer').classList.remove('hidden');
+  document.getElementById('notesDrawer').classList.add('flex');
+  await loadNotes();
+}
+
+function closeNotesDrawer() {
+  document.getElementById('notesDrawer').classList.add('hidden');
+  document.getElementById('notesDrawer').classList.remove('flex');
+}
+
+async function loadNotes() {
+  try {
+    const resp = await fetch('/api/notes?limit=100');
+    if (!resp.ok) return;
+    notesList = await resp.json();
+    renderNotesList(notesList);
+  } catch (e) {}
+}
+
+function renderNotesList(notes) {
+  const container = document.getElementById('notesList');
+  if (!notes || notes.length === 0) {
+    container.innerHTML = '<div class="text-center text-xs text-slate-400 dark:text-gray-500 py-8">まだノートがありません<br>AIとチャットして「📌 保存」で作成してください</div>';
+    return;
+  }
+  container.innerHTML = notes.map(n => {
+    const preview = (n.answer || '').slice(0, 100);
+    const tickers = (n.tickers || []).slice(0, 3).map(t => `<span class="text-[10px] px-1.5 py-0.5 bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 rounded-full font-mono">${t}</span>`).join('');
+    const tags = (n.tags || []).slice(0, 3).map(t => `<span class="text-[10px] px-1.5 py-0.5 bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 rounded-full">#${t}</span>`).join('');
+    const pinIcon = n.is_pinned ? '📌 ' : '';
+    return `<div onclick="openNote(${n.id})" class="p-3 rounded-xl border border-slate-200 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors">
+      <div class="flex items-start justify-between gap-2 mb-1">
+        <h3 class="text-sm font-semibold text-slate-900 dark:text-gray-100 line-clamp-1 flex-1">${pinIcon}${n.title}</h3>
+        <span class="text-[10px] text-slate-400 dark:text-gray-500 shrink-0">${(n.created_at || '').slice(0, 10)}</span>
+      </div>
+      <p class="text-xs text-slate-500 dark:text-gray-400 line-clamp-2 mb-2">${preview}</p>
+      <div class="flex items-center gap-1 flex-wrap">${tickers}${tags}</div>
+    </div>`;
+  }).join('');
+}
+
+function filterNotes(query) {
+  const q = (query || '').toLowerCase();
+  if (!q) {
+    renderNotesList(notesList);
+    return;
+  }
+  const filtered = notesList.filter(n =>
+    (n.title || '').toLowerCase().includes(q) ||
+    (n.answer || '').toLowerCase().includes(q) ||
+    (n.question || '').toLowerCase().includes(q) ||
+    (n.tickers || []).some(t => t.toLowerCase().includes(q)) ||
+    (n.tags || []).some(t => t.toLowerCase().includes(q))
+  );
+  renderNotesList(filtered);
+}
+
+let _currentViewNoteId = null;
+
+async function openNote(noteId) {
+  try {
+    const resp = await fetch(`/api/notes/${noteId}`);
+    if (!resp.ok) return;
+    const n = await resp.json();
+    _currentViewNoteId = noteId;
+    document.getElementById('noteDetailTitle').textContent = (n.is_pinned ? '📌 ' : '') + n.title;
+    const content = document.getElementById('noteDetailContent');
+    const tickersHtml = (n.tickers || []).map(t => `<span class="text-xs px-2 py-0.5 bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 rounded-full font-mono">${t}</span>`).join('');
+    const tagsHtml = (n.tags || []).map(t => `<span class="text-xs px-2 py-0.5 bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 rounded-full">#${t}</span>`).join('');
+    content.innerHTML = `
+      <div class="flex flex-wrap gap-1 mb-3">${tickersHtml}${tagsHtml}</div>
+      <div class="text-[11px] text-slate-400 dark:text-gray-500 mb-3">${n.created_at} · ${n.llm_model || ''}</div>
+      ${n.question ? `<div class="bg-slate-50 dark:bg-gray-800 rounded-lg p-3 mb-3">
+        <div class="text-[10px] text-slate-400 mb-1">質問</div>
+        <div class="text-sm text-slate-700 dark:text-gray-300 whitespace-pre-wrap">${n.question}</div>
+      </div>` : ''}
+      <div>
+        <div class="text-[10px] text-slate-400 mb-1">回答</div>
+        <div class="text-sm text-slate-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">${n.answer}</div>
+      </div>
+    `;
+    document.getElementById('noteDetailPinBtn').onclick = () => togglePinNote(noteId);
+    document.getElementById('noteDetailPinBtn').textContent = n.is_pinned ? '📌 ピン留め解除' : '📌 ピン留め';
+    document.getElementById('noteDetailDeleteBtn').onclick = () => deleteNote(noteId);
+    document.getElementById('noteDetailModal').classList.remove('hidden');
+    document.getElementById('noteDetailModal').classList.add('flex');
+  } catch (e) {}
+}
+
+function closeNoteDetail() {
+  document.getElementById('noteDetailModal').classList.add('hidden');
+  document.getElementById('noteDetailModal').classList.remove('flex');
+  _currentViewNoteId = null;
+}
+
+async function togglePinNote(noteId) {
+  try {
+    await fetch(`/api/notes/${noteId}/pin`, { method: 'POST' });
+    closeNoteDetail();
+    await loadNotes();
+  } catch (e) {}
+}
+
+async function deleteNote(noteId) {
+  const confirmed = await showConfirmDialog('ノート削除', 'このノートを削除しますか？');
+  if (!confirmed) return;
+  try {
+    await fetch(`/api/notes/${noteId}`, { method: 'DELETE' });
+    closeNoteDetail();
+    await loadNotes();
+  } catch (e) {}
+}
+
+// Call fetchCurrentUser on init
+fetchCurrentUser();
+
 init();

@@ -172,7 +172,7 @@
     <!-- Card -->
     <div class="card-glass rounded-2xl p-8 shadow-sm">
 
-      <h2 class="text-white text-base font-medium mb-6 text-center">アクセスコードを入力</h2>
+      <h2 class="text-white text-base font-medium mb-6 text-center">サインイン</h2>
 
       {% if error %}
       <div class="mb-4 px-4 py-3 rounded-xl text-sm text-center"
@@ -182,6 +182,20 @@
       {% endif %}
 
       <form method="post" autocomplete="off">
+        <!-- Username input -->
+        <div class="mb-4">
+          <input
+            id="usernameInput"
+            name="username"
+            type="text"
+            placeholder="ユーザー名"
+            autofocus
+            autocomplete="username"
+            required
+            class="input-surge w-full px-4 py-3.5 rounded-xl text-white text-sm transition-all"
+            style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);"
+          >
+        </div>
         <!-- Password input -->
         <div class="relative mb-6">
           <input
@@ -189,7 +203,8 @@
             name="password"
             type="password"
             placeholder="パスワード"
-            autofocus
+            autocomplete="current-password"
+            required
             class="input-surge w-full px-4 py-3.5 rounded-xl text-white text-sm transition-all"
             style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);"
           >

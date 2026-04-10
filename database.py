@@ -201,6 +201,50 @@ def init_db():
                 created_at TEXT DEFAULT (datetime('now')),
                 is_read INTEGER DEFAULT 0
             );
+
+            -- LLM Phase 1: multi-user auth, research notes, usage tracking
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                avatar_emoji TEXT DEFAULT '👤',
+                role TEXT NOT NULL DEFAULT 'user',
+                created_at TEXT DEFAULT (datetime('now')),
+                last_login_at TEXT,
+                consent_given_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS research_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                question TEXT,
+                answer TEXT NOT NULL,
+                tickers_json TEXT,
+                tags_json TEXT,
+                index_name TEXT,
+                llm_model TEXT,
+                is_pinned INTEGER DEFAULT 0,
+                tool_calls_json TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS user_usage (
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                date TEXT NOT NULL,
+                request_count INTEGER DEFAULT 0,
+                tokens_in INTEGER DEFAULT 0,
+                tokens_out INTEGER DEFAULT 0,
+                cost_usd REAL DEFAULT 0,
+                PRIMARY KEY (user_id, date)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_notes_user_created
+                ON research_notes(user_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_notes_pinned
+                ON research_notes(user_id, is_pinned DESC, created_at DESC);
         """)
 
         # ── Schema migrations: add columns to existing tables ──────────────
@@ -229,6 +273,15 @@ def init_db():
         # ADX (trend strength)
         _add_column_if_missing(conn, "screening_results", "adx", "REAL")
 
+        # LLM Phase 1: user_id columns for per-user data isolation
+        # DEFAULT 1 means existing data auto-links to AKIRA (seeded first, id=1)
+        _add_column_if_missing(conn, "watchlist", "user_id", "INTEGER DEFAULT 1")
+        _add_column_if_missing(conn, "watchlist_events", "user_id", "INTEGER DEFAULT 1")
+        _add_column_if_missing(conn, "backtest_results", "user_id", "INTEGER DEFAULT 1")
+
+        # Seed initial users from SURGE_USERS env var (no-op if already exist)
+        _seed_initial_users(conn)
+
     conn.close()
 
 
@@ -237,6 +290,57 @@ def _add_column_if_missing(conn, table, column, col_type):
     existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
     if column not in existing:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+
+
+def _seed_initial_users(conn):
+    """Seed initial users from SURGE_USERS env var on first init.
+
+    Idempotent: skips any user whose username already exists.
+    Always seeds owner first (so id=1 → AKIRA for user_id DEFAULT 1 migration).
+    """
+    import os
+    import json as _json
+    from werkzeug.security import generate_password_hash
+
+    # Check if any users exist — if so, skip seeding
+    existing = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()
+    if existing["c"] > 0:
+        return
+
+    raw = os.environ.get("SURGE_USERS", "").strip()
+    if not raw:
+        # Fallback: create a default owner using SECRET_KEY-based initial password
+        # so the app doesn't lock itself out on first run
+        conn.execute(
+            "INSERT INTO users (username, password_hash, display_name, avatar_emoji, role) VALUES (?, ?, ?, ?, ?)",
+            ("akira", generate_password_hash("surge"), "AKIRA", "🧑‍💻", "owner"),
+        )
+        return
+
+    try:
+        users = _json.loads(raw)
+    except Exception as e:
+        print(f"[seed] Failed to parse SURGE_USERS JSON: {e}")
+        return
+
+    # Sort so owner comes first (id=1 → owner)
+    users_sorted = sorted(users, key=lambda u: 0 if u.get("role") == "owner" else 1)
+
+    for u in users_sorted:
+        username = (u.get("username") or "").strip()
+        password = u.get("password") or ""
+        if not username or not password:
+            continue
+        display_name = u.get("display_name") or username
+        role = u.get("role") or "user"
+        avatar_emoji = u.get("avatar_emoji") or "👤"
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO users (username, password_hash, display_name, avatar_emoji, role) VALUES (?, ?, ?, ?, ?)",
+                (username, generate_password_hash(password), display_name, avatar_emoji, role),
+            )
+        except Exception as e:
+            print(f"[seed] Failed to insert user {username}: {e}")
 
 
 # ── Sessions ──
@@ -749,25 +853,42 @@ def get_breadth(index_name, days=60):
 
 # ── Watchlist ──
 
-def add_to_watchlist(ticker):
+def add_to_watchlist(ticker, user_id=1):
     conn = _connect()
     with conn:
         conn.execute(
-            "INSERT OR IGNORE INTO watchlist (ticker) VALUES (?)", (ticker.upper(),)
+            "INSERT OR IGNORE INTO watchlist (ticker, user_id) VALUES (?, ?)",
+            (ticker.upper(), user_id),
         )
     conn.close()
 
 
-def remove_from_watchlist(ticker):
+def remove_from_watchlist(ticker, user_id=1):
     conn = _connect()
     with conn:
-        conn.execute("DELETE FROM watchlist WHERE ticker = ?", (ticker.upper(),))
+        conn.execute(
+            "DELETE FROM watchlist WHERE ticker = ? AND user_id = ?",
+            (ticker.upper(), user_id),
+        )
     conn.close()
 
 
-def get_watchlist():
+def get_watchlist(user_id=None):
+    """Return a user's watchlist tickers.
+
+    If user_id is None, returns the UNION of all users' tickers. Used by the
+    shared screening job to detect changes across any user's watchlist.
+    """
     conn = _connect()
-    rows = conn.execute("SELECT ticker FROM watchlist ORDER BY added_at DESC").fetchall()
+    if user_id is None:
+        rows = conn.execute(
+            "SELECT DISTINCT ticker FROM watchlist ORDER BY ticker"
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT ticker FROM watchlist WHERE user_id = ? ORDER BY added_at DESC",
+            (user_id,),
+        ).fetchall()
     conn.close()
     return [r["ticker"] for r in rows]
 
@@ -1006,3 +1127,299 @@ def save_edinet_financials(sec_code, financials_dict):
             (sec_code, _json.dumps(financials_dict, ensure_ascii=False)),
         )
     conn.close()
+
+
+# ── LLM Phase 1: Users ──
+
+def create_user(username, password_hash, display_name, role="user", avatar_emoji="👤"):
+    """Create a new user. Returns new user id, or None if username exists."""
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                """INSERT INTO users (username, password_hash, display_name, role, avatar_emoji)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (username, password_hash, display_name, role, avatar_emoji),
+            )
+            return cur.lastrowid
+    except Exception:
+        return None
+    finally:
+        conn.close()
+
+
+def get_user_by_id(user_id):
+    conn = _connect()
+    row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_user_by_username(username):
+    conn = _connect()
+    row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_user_last_login(user_id):
+    conn = _connect()
+    with conn:
+        conn.execute(
+            "UPDATE users SET last_login_at = datetime('now') WHERE id = ?",
+            (user_id,),
+        )
+    conn.close()
+
+
+def update_user_password(user_id, password_hash):
+    conn = _connect()
+    with conn:
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (password_hash, user_id),
+        )
+    conn.close()
+
+
+def update_user_consent(user_id):
+    conn = _connect()
+    with conn:
+        conn.execute(
+            "UPDATE users SET consent_given_at = datetime('now') WHERE id = ? AND consent_given_at IS NULL",
+            (user_id,),
+        )
+    conn.close()
+
+
+def list_users():
+    """Return all users (no password hashes)."""
+    conn = _connect()
+    rows = conn.execute(
+        "SELECT id, username, display_name, avatar_emoji, role, created_at, last_login_at, consent_given_at FROM users ORDER BY id"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def delete_user(user_id):
+    conn = _connect()
+    with conn:
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.close()
+
+
+# ── LLM Phase 1: Research Notes ──
+
+def insert_note(user_id, title, question, answer, tickers, tags, index_name, llm_model, tool_calls):
+    """Insert a research note. Returns new note id."""
+    import json as _json
+    conn = _connect()
+    with conn:
+        cur = conn.execute(
+            """INSERT INTO research_notes
+               (user_id, title, question, answer, tickers_json, tags_json,
+                index_name, llm_model, tool_calls_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                user_id,
+                title,
+                question,
+                answer,
+                _json.dumps(tickers or [], ensure_ascii=False),
+                _json.dumps(tags or [], ensure_ascii=False),
+                index_name,
+                llm_model,
+                _json.dumps(tool_calls or [], ensure_ascii=False),
+            ),
+        )
+        new_id = cur.lastrowid
+    conn.close()
+    return new_id
+
+
+def _row_to_note(row):
+    import json as _json
+    d = dict(row)
+    for k in ("tickers_json", "tags_json", "tool_calls_json"):
+        raw = d.get(k)
+        try:
+            d[k.replace("_json", "")] = _json.loads(raw) if raw else []
+        except Exception:
+            d[k.replace("_json", "")] = []
+        d.pop(k, None)
+    return d
+
+
+def get_notes_by_user(user_id, ticker=None, pinned_only=False, limit=50):
+    """List notes for a user, optionally filtered by ticker or pinned status."""
+    conn = _connect()
+    sql = "SELECT * FROM research_notes WHERE user_id = ?"
+    params = [user_id]
+    if pinned_only:
+        sql += " AND is_pinned = 1"
+    if ticker:
+        sql += " AND tickers_json LIKE ?"
+        params.append(f'%"{ticker.upper()}"%')
+    sql += " ORDER BY is_pinned DESC, created_at DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [_row_to_note(r) for r in rows]
+
+
+def get_note_by_id(note_id, user_id=None):
+    """Return a single note. If user_id given, enforces ownership."""
+    conn = _connect()
+    if user_id is not None:
+        row = conn.execute(
+            "SELECT * FROM research_notes WHERE id = ? AND user_id = ?",
+            (note_id, user_id),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT * FROM research_notes WHERE id = ?", (note_id,)
+        ).fetchone()
+    conn.close()
+    return _row_to_note(row) if row else None
+
+
+def update_note_fields(note_id, user_id, **fields):
+    """Update allowed fields on a note. Enforces user_id ownership."""
+    import json as _json
+    allowed = {"title", "question", "answer", "tickers_json", "tags_json", "is_pinned"}
+    updates = {}
+    for k, v in fields.items():
+        if k == "tickers":
+            updates["tickers_json"] = _json.dumps(v or [], ensure_ascii=False)
+        elif k == "tags":
+            updates["tags_json"] = _json.dumps(v or [], ensure_ascii=False)
+        elif k in allowed:
+            updates[k] = v
+    if not updates:
+        return False
+    updates["updated_at"] = None  # sentinel — overwritten below
+    set_clause = ", ".join(f"{k} = ?" for k in updates if k != "updated_at")
+    values = [v for k, v in updates.items() if k != "updated_at"]
+    set_clause += ", updated_at = datetime('now')"
+    conn = _connect()
+    with conn:
+        cur = conn.execute(
+            f"UPDATE research_notes SET {set_clause} WHERE id = ? AND user_id = ?",
+            (*values, note_id, user_id),
+        )
+        changed = cur.rowcount > 0
+    conn.close()
+    return changed
+
+
+def delete_note_by_id(note_id, user_id):
+    conn = _connect()
+    with conn:
+        cur = conn.execute(
+            "DELETE FROM research_notes WHERE id = ? AND user_id = ?",
+            (note_id, user_id),
+        )
+        changed = cur.rowcount > 0
+    conn.close()
+    return changed
+
+
+def toggle_note_pin(note_id, user_id):
+    conn = _connect()
+    with conn:
+        cur = conn.execute(
+            """UPDATE research_notes
+               SET is_pinned = CASE WHEN is_pinned = 1 THEN 0 ELSE 1 END,
+                   updated_at = datetime('now')
+               WHERE id = ? AND user_id = ?""",
+            (note_id, user_id),
+        )
+        changed = cur.rowcount > 0
+    conn.close()
+    return changed
+
+
+def get_all_notes(ticker=None, limit=30):
+    """Return notes from ALL users (owner-only use case). Includes author display_name."""
+    conn = _connect()
+    sql = """
+        SELECT rn.*, u.display_name AS author_name, u.username AS author_username
+        FROM research_notes rn
+        JOIN users u ON u.id = rn.user_id
+    """
+    params = []
+    if ticker:
+        sql += " WHERE rn.tickers_json LIKE ?"
+        params.append(f'%"{ticker.upper()}"%')
+    sql += " ORDER BY rn.created_at DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [_row_to_note(r) for r in rows]
+
+
+# ── LLM Phase 1: Usage tracking ──
+
+def get_usage(user_id, date):
+    conn = _connect()
+    row = conn.execute(
+        "SELECT * FROM user_usage WHERE user_id = ? AND date = ?",
+        (user_id, date),
+    ).fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return {
+        "user_id": user_id,
+        "date": date,
+        "request_count": 0,
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "cost_usd": 0.0,
+    }
+
+
+def increment_usage(user_id, date, tokens_in, tokens_out, cost_usd):
+    """UPSERT usage counters for a user+date."""
+    conn = _connect()
+    with conn:
+        conn.execute(
+            """INSERT INTO user_usage (user_id, date, request_count, tokens_in, tokens_out, cost_usd)
+               VALUES (?, ?, 1, ?, ?, ?)
+               ON CONFLICT(user_id, date) DO UPDATE SET
+                   request_count = request_count + 1,
+                   tokens_in = tokens_in + excluded.tokens_in,
+                   tokens_out = tokens_out + excluded.tokens_out,
+                   cost_usd = cost_usd + excluded.cost_usd""",
+            (user_id, date, tokens_in, tokens_out, cost_usd),
+        )
+    conn.close()
+
+
+def get_global_cost_today(date):
+    conn = _connect()
+    row = conn.execute(
+        "SELECT COALESCE(SUM(cost_usd), 0) AS total FROM user_usage WHERE date = ?",
+        (date,),
+    ).fetchone()
+    conn.close()
+    return float(row["total"]) if row else 0.0
+
+
+def get_all_users_usage(date):
+    """Owner admin view of all users' usage for a given date."""
+    conn = _connect()
+    rows = conn.execute(
+        """SELECT u.id, u.username, u.display_name, u.role,
+                  COALESCE(uu.request_count, 0) AS request_count,
+                  COALESCE(uu.tokens_in, 0) AS tokens_in,
+                  COALESCE(uu.tokens_out, 0) AS tokens_out,
+                  COALESCE(uu.cost_usd, 0) AS cost_usd
+           FROM users u
+           LEFT JOIN user_usage uu ON uu.user_id = u.id AND uu.date = ?
+           ORDER BY u.id""",
+        (date,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
