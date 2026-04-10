@@ -3096,6 +3096,68 @@ function toggleProMode(e) {
   updateChatModelBadge();
 }
 
+// Minimal safe markdown renderer for chat bubbles.
+// Handles: **bold**, *italic*/_italic_, `code`, headers (###), bullet lists (* / -),
+// and line breaks. HTML is escaped first to prevent injection.
+function renderChatMarkdown(text) {
+  if (!text) return '';
+  // 1) HTML escape
+  const esc = (s) => s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+  let s = esc(text);
+
+  // 2) Inline code (do first so formatting inside is preserved literally)
+  s = s.replace(/`([^`\n]+)`/g, '<code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-gray-700 text-[0.85em] font-mono">$1</code>');
+
+  // 3) Bold **text** (non-greedy)
+  s = s.replace(/\*\*([^\n*]+?)\*\*/g, '<strong class="font-semibold">$1</strong>');
+
+  // 4) Process lines for lists and headers
+  const lines = s.split('\n');
+  const out = [];
+  let inList = false;
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    // Headers: ### / ## / #
+    const h = line.match(/^(#{1,3})\s+(.*)$/);
+    if (h) {
+      if (inList) { out.push('</ul>'); inList = false; }
+      const level = h[1].length;
+      const tag = level === 1 ? 'h3' : level === 2 ? 'h4' : 'h5';
+      out.push(`<${tag} class="font-semibold mt-1 mb-0.5">${h[2]}</${tag}>`);
+      continue;
+    }
+    // Bullet list: *   item  or  - item  or  • item
+    const b = line.match(/^\s*[\*\-\u2022]\s+(.*)$/);
+    if (b) {
+      if (!inList) { out.push('<ul class="list-disc pl-5 my-1 space-y-0.5">'); inList = true; }
+      out.push(`<li>${b[1]}</li>`);
+      continue;
+    }
+    // Not a list line
+    if (inList) { out.push('</ul>'); inList = false; }
+    out.push(line);
+  }
+  if (inList) out.push('</ul>');
+  s = out.join('\n');
+
+  // 5) Italic *text* and _text_ — only when not part of bold/list syntax.
+  //    We matched ** and leading * already, so remaining * pairs are italic.
+  s = s.replace(/(^|[^*\w])\*([^\n*]+?)\*(?!\w)/g, '$1<em>$2</em>');
+  s = s.replace(/(^|[^_\w])_([^\n_]+?)_(?!\w)/g, '$1<em>$2</em>');
+
+  // 6) Convert remaining newlines to <br> (but not inside block tags we added)
+  s = s.replace(/\n(?!<\/?(?:ul|li|h3|h4|h5)>)/g, '<br>');
+  // Clean up <br> right after closing block tags
+  s = s.replace(/(<\/(?:ul|h3|h4|h5)>)<br>/g, '$1');
+
+  return s;
+}
+
 function appendChatMessage(role, content, options = {}) {
   const container = document.getElementById('chatMessages');
   const msgEl = document.createElement('div');
@@ -3106,8 +3168,12 @@ function appendChatMessage(role, content, options = {}) {
   const bubble = document.createElement('div');
   bubble.className = isUser
     ? 'max-w-[85%] bg-primary-500 text-white rounded-2xl rounded-tr-md px-4 py-2 text-sm whitespace-pre-wrap break-words'
-    : 'max-w-[90%] bg-slate-100 dark:bg-gray-800 text-slate-900 dark:text-gray-100 rounded-2xl rounded-tl-md px-4 py-2 text-sm whitespace-pre-wrap break-words';
-  bubble.textContent = content;
+    : 'max-w-[90%] bg-slate-100 dark:bg-gray-800 text-slate-900 dark:text-gray-100 rounded-2xl rounded-tl-md px-4 py-2 text-sm break-words leading-relaxed';
+  if (isUser) {
+    bubble.textContent = content;
+  } else {
+    bubble.innerHTML = renderChatMarkdown(content);
+  }
   msgEl.appendChild(bubble);
   if (options.assistantFinal && !isUser) {
     const saveBtn = document.createElement('button');
@@ -3249,7 +3315,7 @@ async function sendChatMessage() {
               assistantBubble = appendChatMessage('assistant', '');
             }
             assistantText += chunk.content;
-            assistantBubble.textContent = assistantText;
+            assistantBubble.innerHTML = renderChatMarkdown(assistantText);
           } else if (chunk.type === 'tool_call') {
             appendToolCallIndicator(chunk.name, chunk.args);
             toolCallsLog.push({ name: chunk.name, args: chunk.args });

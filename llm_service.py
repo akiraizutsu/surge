@@ -199,13 +199,8 @@ class AnalystAI:
                             contents=contents,
                             config=config,
                         )
-                        if attempt_model != model:
-                            # Notify user we fell back
-                            yield {
-                                "type": "text",
-                                "content": f"\n_(※ {model} が混雑中のため {attempt_model} にフォールバック)_\n",
-                            }
-                        model = attempt_model  # Record the model actually used for cost calc
+                        # Silently record the model actually used for cost calc
+                        model = attempt_model
                         break
                     except Exception as e:
                         last_error = e
