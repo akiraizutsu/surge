@@ -8,6 +8,18 @@ html {
   overflow-x: hidden;
 }
 
+/* ── Modal scroll lock ─────────────────────────────────────────────────
+   When any full-screen modal/drawer is visible (toggled by swapping
+   "hidden" → "flex"), lock the body scroll so the page behind doesn't
+   move when the user scrolls outside the modal. Uses :has() which is
+   supported in all modern browsers (Safari 15.4+, Chrome 105+, Firefox 121+).
+*/
+body:has(> div.fixed.inset-0.flex),
+body:has(main div.fixed.inset-0.flex),
+body:has(div#alertBuilderOverlay) {
+  overflow: hidden;
+}
+
 /* ── Dark mode smooth transition ──────────────────────────────────────── */
 html.dark-transition,
 html.dark-transition *,
