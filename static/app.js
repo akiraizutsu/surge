@@ -2860,6 +2860,26 @@ let lastAssistantAnswer = null;  // For "save to note" feature
 let lastAssistantQuestion = null;
 let lastAssistantToolCalls = [];
 
+// Move all modals/drawers out of <main> to <body> so position:fixed is
+// unambiguously viewport-relative (inside main, a padding offset causes
+// fixed descendants to be offset instead of covering the viewport).
+(function detachModalsToBody() {
+  const selectors = [
+    'main > div[id$="Modal"]',
+    'main > div[id$="Drawer"]',
+    'main > div[id$="Dialog"]',
+    'main > div#modal',
+    'main > div#cfModal',
+    'main > div#compareModal',
+    'main > div#compareFloating',
+  ];
+  selectors.forEach(sel => {
+    document.querySelectorAll(sel).forEach(el => {
+      document.body.appendChild(el);
+    });
+  });
+})();
+
 async function fetchCurrentUser() {
   try {
     const resp = await fetch('/api/auth/me');
@@ -3029,14 +3049,57 @@ function appendChatMessage(role, content, options = {}) {
   return bubble;
 }
 
+// Map internal tool names to user-friendly Japanese messages.
+// These are shown to convey "AI is actually fetching data" without technical jargon.
+function humanizeToolCall(name, args) {
+  const a = args || {};
+  const INDEX_LABEL = {
+    sp500: 'S&P 500',
+    nasdaq100: 'NASDAQ 100',
+    nikkei225: '日経225',
+    growth250: 'グロース250',
+  };
+  const indexName = INDEX_LABEL[a.index] || a.index || '';
+
+  switch (name) {
+    case 'get_ranking':
+      return `📊 ${indexName || 'インデックス'}の最新ランキングを確認しています...`;
+    case 'get_stock_detail':
+      return `🔍 ${a.ticker || '銘柄'}の詳細データを取得中...`;
+    case 'filter_stocks':
+      return `🧮 ${indexName || 'マーケット'}から条件に合う銘柄を絞り込み中...`;
+    case 'get_market_regime':
+      return `🌡️ ${indexName || '市場'}のレジーム（相場地合い）を分析中...`;
+    case 'compare_stocks': {
+      const tickers = (a.tickers || []).slice(0, 3).join(', ');
+      return `⚖️ ${tickers || '銘柄'}を比較しています...`;
+    }
+    case 'find_similar_stocks':
+      return `🔗 ${a.reference_ticker || '指定銘柄'}に似た銘柄を探しています...`;
+    case 'get_cf_pattern_stocks':
+      return `💰 キャッシュフロー条件で日本株を検索中...`;
+    case 'get_sector_rotation':
+      return `🔄 ${indexName || '市場'}のセクターローテーションを確認中...`;
+    case 'get_collective_notes':
+      return `📚 過去の調査ノートを参照しています...`;
+    case 'get_friends_activity_summary':
+      return `👥 コミュニティの最近の調査動向を確認中...`;
+    case 'search_web_sentiment':
+      return `🌐 最新のニュース・センチメントを検索中...`;
+    default:
+      return `⚙️ データを確認しています...`;
+  }
+}
+
 function appendToolCallIndicator(name, args) {
   const container = document.getElementById('chatMessages');
   const el = document.createElement('div');
   el.className = 'flex justify-start';
   const badge = document.createElement('div');
-  badge.className = 'text-[10px] px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-mono flex items-center gap-1.5';
-  const argsStr = Object.entries(args || {}).map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`).join(', ').slice(0, 60);
-  badge.textContent = `🔧 ${name}(${argsStr})`;
+  badge.className = 'text-[11px] px-3 py-1.5 rounded-full bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 italic flex items-center gap-1.5';
+  badge.textContent = humanizeToolCall(name, args);
+  // Small secondary tooltip with raw info for debugging
+  badge.title = `${name}(${JSON.stringify(args || {})})`;
   el.appendChild(badge);
   container.appendChild(el);
   container.scrollTop = container.scrollHeight;

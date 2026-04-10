@@ -42,6 +42,7 @@ OWNER_TOOLS = FRIEND_TOOLS + OWNER_ONLY_TOOLS
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 ADVANCED_MODEL = "gemini-2.5-pro"
+FALLBACK_MODEL = "gemini-2.5-flash-lite"  # Used when primary is overloaded (503)
 
 
 # ── Client singleton ────────────────────────────────────────────────────
@@ -181,27 +182,53 @@ class AnalystAI:
         final_text = ""
 
         for round_idx in range(6):
-            # Retry on transient 503/429 errors
+            # Retry on transient 503/429 errors with exponential backoff,
+            # then fall back to gemini-2.5-flash-lite if primary is still overloaded.
             import time
             response = None
             last_error = None
-            for retry in range(3):
-                try:
-                    response = client.models.generate_content(
-                        model=model,
-                        contents=contents,
-                        config=config,
-                    )
+            models_to_try = [model]
+            if model != FALLBACK_MODEL:
+                models_to_try.append(FALLBACK_MODEL)
+
+            for attempt_model in models_to_try:
+                for retry in range(4):
+                    try:
+                        response = client.models.generate_content(
+                            model=attempt_model,
+                            contents=contents,
+                            config=config,
+                        )
+                        if attempt_model != model:
+                            # Notify user we fell back
+                            yield {
+                                "type": "text",
+                                "content": f"\n_(※ {model} が混雑中のため {attempt_model} にフォールバック)_\n",
+                            }
+                        model = attempt_model  # Record the model actually used for cost calc
+                        break
+                    except Exception as e:
+                        last_error = e
+                        err_str = str(e)
+                        is_transient = (
+                            "503" in err_str
+                            or "UNAVAILABLE" in err_str
+                            or "overloaded" in err_str.lower()
+                        )
+                        is_quota = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
+                        if is_transient or is_quota:
+                            # Exponential backoff: 1s, 2s, 4s, 8s
+                            time.sleep(2 ** retry)
+                            continue
+                        break
+                if response is not None:
                     break
-                except Exception as e:
-                    last_error = e
-                    err_str = str(e)
-                    if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                        time.sleep(1.5 * (retry + 1))
-                        continue
-                    break
+
             if response is None:
-                yield {"type": "error", "error": f"LLM call failed: {last_error}"}
+                yield {
+                    "type": "error",
+                    "error": f"LLM APIが応答しません（混雑中）。数分後に再試行してください。\n詳細: {last_error}",
+                }
                 return
 
             # Accumulate usage
