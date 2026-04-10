@@ -495,6 +495,7 @@ def get_latest_sessions_by_index():
     conn = _connect()
     results = {}
     for idx in ("sp500", "nasdaq100", "nikkei225", "growth250"):
+      try:
         session = conn.execute(
             "SELECT * FROM screening_sessions WHERE index_name = ? ORDER BY id DESC LIMIT 1",
             (idx,),
@@ -612,54 +613,63 @@ def get_latest_sessions_by_index():
         except Exception:
             pass
 
-        # Rebuild derived rankings from momentum_ranking data
-        breakout_ranking = [r for r in ranking
-            if r["technicals"].get("is_breakout") or r["technicals"].get("bb_squeeze")]
-
-        # Rebuild sector rotation from ranking
-        _sect_data = {}
-        for r in ranking:
-            s = r.get("sector") or "Unknown"
-            _sect_data.setdefault(s, {"ret_1m": [], "ret_3m": [], "rs_1m": [], "count": 0})
-            _sect_data[s]["count"] += 1
-            if r["technicals"].get("ret_1m") is not None:
-                _sect_data[s]["ret_1m"].append(r["technicals"]["ret_1m"])
-            if r["technicals"].get("ret_3m") is not None:
-                _sect_data[s]["ret_3m"].append(r["technicals"]["ret_3m"])
-            if r["technicals"].get("rs_1m") is not None:
-                _sect_data[s]["rs_1m"].append(r["technicals"]["rs_1m"])
-        sector_rotation = []
-        for s, v in _sect_data.items():
-            if not v["ret_1m"]:
-                continue
-            r1m = round(sum(v["ret_1m"]) / len(v["ret_1m"]), 2)
-            r3m = round(sum(v["ret_3m"]) / len(v["ret_3m"]), 2) if v["ret_3m"] else 0
-            rs1m = round(sum(v["rs_1m"]) / len(v["rs_1m"]), 2) if v["rs_1m"] else 0
-            if r1m > 0 and r3m > 0:
-                trend = "加速" if r1m > r3m / 3 else "安定"
-            elif r1m > 0:
-                trend = "回復"
-            elif r3m > 0:
-                trend = "減速"
-            else:
-                trend = "衰退"
-            sector_rotation.append({
-                "sector": s, "etf": r["technicals"].get("sector_etf", "SPY"),
-                "ret_1m_avg": r1m, "ret_3m_avg": r3m, "etf_1m": 0, "etf_3m": 0,
-                "rs_1m_avg": rs1m, "stock_count": v["count"], "trend": trend,
-            })
-        sector_rotation.sort(key=lambda x: x["ret_1m_avg"], reverse=True)
-
+        # Rebuild derived rankings from momentum_ranking data (defensive)
         is_japan = idx in ("nikkei225", "growth250")
-        # Rebuild seed/smallcap/time_arb from ranking (Japan only)
-        seed_ranking = sorted(
-            [r for r in ranking if r.get("seed_score") and r["seed_score"] >= 20],
-            key=lambda x: x.get("seed_score", 0), reverse=True
-        )[:20] if is_japan else []
+        breakout_ranking = []
+        sector_rotation = []
+        seed_ranking = []
+        smallcap_ranking = []
+        try:
+            breakout_ranking = [rk for rk in ranking
+                if rk.get("technicals", {}).get("is_breakout") or rk.get("technicals", {}).get("bb_squeeze")]
 
-        smallcap_ranking = [r for r in ranking
-            if r.get("fundamentals", {}).get("market_cap_b") is not None
-            and 1 <= (r["fundamentals"]["market_cap_b"] or 0) <= 30] if is_japan else []
+            # Rebuild sector rotation from ranking
+            _sect_data = {}
+            _sect_etf = {}
+            for rk in ranking:
+                s = rk.get("sector") or "Unknown"
+                tech = rk.get("technicals", {}) or {}
+                _sect_data.setdefault(s, {"ret_1m": [], "ret_3m": [], "rs_1m": [], "count": 0})
+                _sect_etf.setdefault(s, tech.get("sector_etf") or ("^N225" if is_japan else "SPY"))
+                _sect_data[s]["count"] += 1
+                if tech.get("ret_1m") is not None:
+                    _sect_data[s]["ret_1m"].append(tech["ret_1m"])
+                if tech.get("ret_3m") is not None:
+                    _sect_data[s]["ret_3m"].append(tech["ret_3m"])
+                if tech.get("rs_1m") is not None:
+                    _sect_data[s]["rs_1m"].append(tech["rs_1m"])
+            for s, v in _sect_data.items():
+                if not v["ret_1m"]:
+                    continue
+                r1m = round(sum(v["ret_1m"]) / len(v["ret_1m"]), 2)
+                r3m = round(sum(v["ret_3m"]) / len(v["ret_3m"]), 2) if v["ret_3m"] else 0
+                rs1m = round(sum(v["rs_1m"]) / len(v["rs_1m"]), 2) if v["rs_1m"] else 0
+                if r1m > 0 and r3m > 0:
+                    trend = "加速" if r1m > r3m / 3 else "安定"
+                elif r1m > 0:
+                    trend = "回復"
+                elif r3m > 0:
+                    trend = "減速"
+                else:
+                    trend = "衰退"
+                sector_rotation.append({
+                    "sector": s, "etf": _sect_etf.get(s, "SPY"),
+                    "ret_1m_avg": r1m, "ret_3m_avg": r3m, "etf_1m": 0, "etf_3m": 0,
+                    "rs_1m_avg": rs1m, "stock_count": v["count"], "trend": trend,
+                })
+            sector_rotation.sort(key=lambda x: x["ret_1m_avg"], reverse=True)
+
+            if is_japan:
+                seed_ranking = sorted(
+                    [rk for rk in ranking if rk.get("seed_score") and rk["seed_score"] >= 20],
+                    key=lambda x: x.get("seed_score", 0), reverse=True
+                )[:20]
+                smallcap_ranking = [rk for rk in ranking
+                    if (rk.get("fundamentals") or {}).get("market_cap_b") is not None
+                    and 1 <= (rk["fundamentals"]["market_cap_b"] or 0) <= 30]
+        except Exception:
+            # Defensive: if rebuild fails, return empty arrays rather than failing the whole restore
+            pass
 
         index_label = {"sp500": "S&P 500", "nasdaq100": "NASDAQ 100", "nikkei225": "日経225", "growth250": "グロース250"}.get(idx, idx)
         results[idx] = {
@@ -682,6 +692,12 @@ def get_latest_sessions_by_index():
             "latest_breadth": latest_breadth,
             "regime": regime,
         }
+      except Exception as e:
+        # Defensive: skip this index if restore fails, continue with others
+        import traceback
+        print(f"[DB restore] Failed for {idx}: {e}")
+        traceback.print_exc()
+        continue
     conn.close()
     return results
 
