@@ -2860,7 +2860,7 @@ let lastAssistantAnswer = null;  // For "save to note" feature
 let lastAssistantQuestion = null;
 let lastAssistantToolCalls = [];
 
-// Move all modals/drawers out of <main> to <body> so position:fixed is
+// Move all modals/drawers/FABs out of <main> to <body> so position:fixed is
 // unambiguously viewport-relative (inside main, a padding offset causes
 // fixed descendants to be offset instead of covering the viewport).
 (function detachModalsToBody() {
@@ -2872,6 +2872,7 @@ let lastAssistantToolCalls = [];
     'main > div#cfModal',
     'main > div#compareModal',
     'main > div#compareFloating',
+    'main > button#chatFab',
   ];
   selectors.forEach(sel => {
     document.querySelectorAll(sel).forEach(el => {
@@ -2912,18 +2913,25 @@ function unlockBodyScroll() {
 }
 
 function updateModalScrollLock() {
-  const anyOpen = Array.from(document.querySelectorAll('.fixed.inset-0')).some(el => {
+  const anyFullscreenOpen = Array.from(document.querySelectorAll('.fixed.inset-0')).some(el => {
     if (_LOCK_EXCLUDE_IDS.has(el.id)) return false;
+    // Skip if hidden (either via class or a hidden ancestor)
     if (el.classList.contains('hidden')) return false;
     if (el.classList.contains('pointer-events-none')) return false;
     const cs = getComputedStyle(el);
     if (cs.display === 'none') return false;
+    // Skip background decorations (z < 40)
     const zIdx = parseInt(cs.zIndex, 10);
     if (!isNaN(zIdx) && zIdx < 40) return false;
+    // Only lock for elements that actually cover the viewport
+    // (docked panels don't need scroll lock on desktop)
+    const rect = el.getBoundingClientRect();
+    if (rect.width < window.innerWidth * 0.8) return false;
+    if (rect.height < window.innerHeight * 0.7) return false;
     return true;
   });
   const hasDynamicOverlay = !!document.getElementById('alertBuilderOverlay');
-  const shouldLock = anyOpen || hasDynamicOverlay;
+  const shouldLock = anyFullscreenOpen || hasDynamicOverlay;
   if (shouldLock) lockBodyScroll();
   else unlockBodyScroll();
 }
@@ -3039,14 +3047,24 @@ async function submitChangePassword() {
 
 async function openChatDrawer() {
   document.getElementById('chatDrawer').classList.remove('hidden');
-  document.getElementById('chatDrawer').classList.add('flex');
+  // Hide FAB while open (avoid visual duplication since there's an X button)
+  document.getElementById('chatFab')?.classList.add('hidden');
   await loadChatUsage();
   setTimeout(() => document.getElementById('chatInput')?.focus(), 100);
 }
 
 function closeChatDrawer() {
   document.getElementById('chatDrawer').classList.add('hidden');
-  document.getElementById('chatDrawer').classList.remove('flex');
+  document.getElementById('chatFab')?.classList.remove('hidden');
+}
+
+function toggleChatDrawer() {
+  const drawer = document.getElementById('chatDrawer');
+  if (drawer.classList.contains('hidden')) {
+    openChatDrawer();
+  } else {
+    closeChatDrawer();
+  }
 }
 
 async function loadChatUsage() {

@@ -194,10 +194,6 @@
         class="inline-flex items-center justify-center h-9 sm:h-10 px-3 sm:px-4 text-xs sm:text-sm font-medium border border-slate-200 dark:border-gray-700 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer">
         ⚡
       </button>
-      <button id="btnChat" onclick="openChatDrawer()" title="AIアナリスト"
-        class="inline-flex items-center justify-center h-9 sm:h-10 px-3 sm:px-4 text-xs sm:text-sm font-medium border border-slate-200 dark:border-gray-700 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer">
-        🤖<span class="hidden sm:inline ml-1">AI</span>
-      </button>
       <button id="btnNotes" onclick="openNotesDrawer()" title="調査ノート"
         class="inline-flex items-center justify-center h-9 sm:h-10 px-3 sm:px-4 text-xs sm:text-sm font-medium border border-slate-200 dark:border-gray-700 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer">
         📓<span class="hidden sm:inline ml-1">ノート</span>
@@ -650,7 +646,7 @@
     </div>
 
     <!-- Floating Compare Button -->
-    <div id="compareFloating" class="hidden fixed bottom-6 right-6 z-40">
+    <div id="compareFloating" class="hidden fixed bottom-[88px] right-5 sm:right-6 z-40">
       <button onclick="showComparisonModal()" class="px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-medium rounded-full shadow-lg hover:shadow-xl transition-all cursor-pointer flex items-center gap-2">
         比較 (<span id="compareCount">0</span>)
       </button>
@@ -761,10 +757,16 @@
     </div>
 
     <!-- LLM Chat Drawer -->
-    <div id="chatDrawer" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4" onclick="if(event.target===this)closeChatDrawer()">
-      <div class="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl h-[90vh] sm:h-[80vh] flex flex-col shadow-xl border border-slate-200 dark:border-gray-800">
-        <div class="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-gray-800 shrink-0">
-          <h2 class="text-base font-semibold text-slate-900 dark:text-gray-100 flex items-center gap-2">
+    <!-- LLM Chat: docked panel on desktop (bottom-right), bottom sheet on mobile -->
+    <div id="chatDrawer" class="hidden">
+      <!-- Mobile backdrop (sm:hidden hides on desktop) -->
+      <div class="sm:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onclick="closeChatDrawer()"></div>
+      <!-- Panel -->
+      <div class="fixed z-50 bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 shadow-2xl flex flex-col
+                  inset-x-0 bottom-0 top-14 rounded-t-2xl
+                  sm:inset-auto sm:right-6 sm:bottom-6 sm:top-auto sm:w-[400px] sm:h-[640px] sm:max-h-[calc(100vh-120px)] sm:rounded-2xl">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-gray-800 shrink-0">
+          <h2 class="text-sm font-semibold text-slate-900 dark:text-gray-100 flex items-center gap-2">
             🤖 <span>AIアナリスト</span>
             <span id="chatModelBadge" class="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 font-mono">flash</span>
           </h2>
@@ -777,28 +779,35 @@
               </span>
               <span class="text-slate-600 dark:text-gray-400">Pro</span>
             </label>
-            <button onclick="clearChatHistory()" class="text-xs text-slate-400 dark:text-gray-500 hover:text-primary-500 transition-colors cursor-pointer">クリア</button>
-            <button onclick="closeChatDrawer()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer text-slate-400 dark:text-gray-500">✕</button>
+            <button onclick="clearChatHistory()" class="text-[11px] text-slate-400 dark:text-gray-500 hover:text-primary-500 transition-colors cursor-pointer">クリア</button>
+            <button onclick="closeChatDrawer()" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer text-slate-400 dark:text-gray-500">✕</button>
           </div>
         </div>
-        <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
-        <div class="border-t border-slate-200 dark:border-gray-800 px-4 py-3 shrink-0">
-          <div class="flex items-center justify-between text-[10px] text-slate-400 dark:text-gray-500 mb-2">
+        <div id="chatMessages" class="flex-1 overflow-y-auto p-3 space-y-3"></div>
+        <div class="border-t border-slate-200 dark:border-gray-800 px-3 py-2.5 shrink-0">
+          <div class="flex items-center justify-between text-[10px] text-slate-400 dark:text-gray-500 mb-1.5">
             <span>本日: <span id="chatUsageCount">-</span>/<span id="chatUsageLimit">-</span>回</span>
             <span id="chatModelInfo">リセット: 明日 0:00 JST</span>
           </div>
           <div class="flex gap-2 items-center">
-            <input id="chatInput" type="text" placeholder="質問を入力... (例: SP500の上位5銘柄は？)"
+            <input id="chatInput" type="text" placeholder="質問を入力... (例: SP500 上位5銘柄)"
               class="flex-1 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 outline-none text-slate-900 dark:text-gray-100"
               onkeydown="if(event.key==='Enter' && !event.shiftKey && !chatIsStreaming){event.preventDefault();sendChatMessage();}">
             <button id="chatSendBtn" onclick="sendChatMessage()"
-              class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium">
+              class="px-3 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium shrink-0">
               送信
             </button>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- AI Analyst Floating Action Button (FAB) -->
+    <button id="chatFab" onclick="toggleChatDrawer()" title="AIアナリスト"
+      class="fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-40 w-14 h-14 rounded-full bg-primary-500 hover:bg-primary-600 active:scale-95 text-white shadow-lg hover:shadow-xl transition-all cursor-pointer flex items-center justify-center text-2xl"
+      aria-label="AIアナリストを開く">
+      <span id="chatFabIcon">🤖</span>
+    </button>
 
     <!-- Research Notes Drawer -->
     <div id="notesDrawer" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4" onclick="if(event.target===this)closeNotesDrawer()">
