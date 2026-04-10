@@ -1075,12 +1075,14 @@ def compute_value_gap(all_results, fundamentals_list, is_japan=False):
         pe_forward = fund.get("pe_forward", 0) or 0
         recommendation = fund.get("recommendation", "N/A")
 
-        # Filter: must have upside, be declining, and have some growth
-        if target_gap_pct < 15:
+        # Filter: must have meaningful analyst upside
+        if target_gap_pct < 5:
             continue
-        if ret_1m >= 0:
-            continue
-        if eps_growth <= 0 and rev_growth <= 0:
+        # Require at least one growth signal OR underperformance
+        rsi_val = r.get("rsi", 50) or 50
+        has_growth = eps_growth > 0 or rev_growth > 0
+        is_underperforming = ret_1m < 0 or rsi_val < 45
+        if not has_growth and not is_underperforming:
             continue
 
         # Recommendation score
