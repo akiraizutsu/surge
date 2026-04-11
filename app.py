@@ -495,7 +495,8 @@ def _trigger_scheduled_screening(index_key, label):
     """Called by scheduler_service at each slot fire time.
 
     Skips quietly if a screening is already running so we don't stomp a
-    manual run or an overlapping scheduled run.
+    manual run or an overlapping scheduled run. Uses top_n=50 so that
+    the AI chat can look up stocks beyond the top 20 momentum leaders.
     """
     global _screening_thread
     with _lock:
@@ -506,7 +507,9 @@ def _trigger_scheduled_screening(index_key, label):
         if _state["running"]:
             _state["running"] = False
             _state["error"] = None
-    top_n = _state.get("last_top_n") or 20
+    # Fixed top_n=50 for scheduled runs: broader AI lookup coverage at
+    # the cost of ~2.5x fundamentals API calls vs top_n=20.
+    top_n = 50
     print(f"[scheduler] {label}: starting {index_key} (top_n={top_n})")
     _screening_thread = threading.Thread(
         target=_run_screening_job, args=(index_key, top_n), daemon=True

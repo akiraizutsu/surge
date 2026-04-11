@@ -38,12 +38,28 @@ def _get_index_results(index):
     return all_results.get(index)
 
 
-def _find_stock_everywhere(ticker):
-    """Search all indices for a ticker, returning (index, stock_dict) or None."""
+def _find_stock_everywhere(query):
+    """Search all indices for a ticker OR partial name match.
+
+    Returns (index, stock_dict) or (None, None) if nothing matched.
+    Ticker matches take priority; name matches are case-insensitive substring.
+    """
+    if not query:
+        return None, None
+    q_upper = query.upper()
+    q_lower = query.lower()
     all_results = database.get_latest_sessions_by_index()
+    # Pass 1: exact ticker match (with or without .T suffix)
     for idx, data in all_results.items():
         for r in (data or {}).get("momentum_ranking") or []:
-            if r.get("ticker", "").upper() == ticker.upper():
+            ticker = (r.get("ticker") or "").upper()
+            if ticker == q_upper or ticker == q_upper + ".T":
+                return idx, r
+    # Pass 2: partial name match (Japanese or English company name)
+    for idx, data in all_results.items():
+        for r in (data or {}).get("momentum_ranking") or []:
+            name = (r.get("name") or "").lower()
+            if q_lower in name:
                 return idx, r
     return None, None
 
@@ -126,12 +142,22 @@ def _tool_get_ranking(args, user_id):
 
 
 def _tool_get_stock_detail(args, user_id):
-    ticker = (args.get("ticker") or "").strip().upper()
+    ticker = (args.get("ticker") or "").strip()
     if not ticker:
         return {"error": "ticker is required"}
     idx, stock = _find_stock_everywhere(ticker)
     if not stock:
-        return {"error": f"ticker '{ticker}' not found in latest screening results"}
+        return {
+            "error": (
+                f"'{ticker}' not found in latest screening results. "
+                "This does NOT mean the stock is unlisted — Surge only stores the top "
+                "~50 momentum leaders per index. "
+                "To answer the user, try `search_web_sentiment` to look up the stock "
+                "and get the correct ticker and recent info."
+            ),
+            "suggestion": "use search_web_sentiment",
+            "query": ticker,
+        }
     return {"index": idx, "stock": _trim_stock(stock, "full")}
 
 
@@ -464,9 +490,12 @@ TOOL_DECLARATIONS = {
     ),
     "get_stock_detail": _decl(
         "get_stock_detail",
-        "特定の銘柄の全テクニカル指標・ファンダメンタルズ・サポレジを取得する。",
+        "特定の銘柄の全テクニカル指標・ファンダメンタルズ・サポレジを取得する。"
+        "ティッカー(例: AAPL, 7203.T, 285A.T)または会社名の部分一致で検索できる。"
+        "DB に無い場合は 'not found' エラーを返すが、これは未上場を意味しない—"
+        "上位 ~50 銘柄のみ保存されているため。その場合は search_web_sentiment を使うこと。",
         {
-            "ticker": {"type": "string", "description": "ティッカーシンボル（例: AAPL, 7203.T）"},
+            "ticker": {"type": "string", "description": "ティッカー（AAPL, 7203.T, 285A.T など）または会社名の一部"},
         },
         required=["ticker"],
     ),
