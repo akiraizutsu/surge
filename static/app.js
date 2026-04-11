@@ -2961,6 +2961,12 @@ async function fetchCurrentUser() {
       }
       document.getElementById('proModeCheckbox').checked = chatProMode;
       updateChatModelBadge();
+      // Show manual-run screening button for owner only
+      const btnRun = document.getElementById('btnRun');
+      if (btnRun) {
+        btnRun.classList.remove('hidden');
+        btnRun.classList.add('inline-flex');
+      }
     }
     return currentUser;
   } catch (e) { /* ignore */ }
