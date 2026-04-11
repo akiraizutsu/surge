@@ -737,14 +737,19 @@
     <!-- Consent Modal -->
     <div id="consentModal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-700 p-6 max-w-md w-full shadow-xl">
-        <h3 class="text-lg font-bold text-slate-900 dark:text-gray-100 mb-3">Surge v2 へようこそ</h3>
-        <div class="text-sm text-slate-600 dark:text-gray-400 space-y-2">
-          <p>このシステムでは、あなたが作成する調査ノートを以下の目的で利用します:</p>
+        <h3 class="text-lg font-bold text-slate-900 dark:text-gray-100 mb-3">🤖 銘柄分析ロボちゃんについて</h3>
+        <div class="text-sm text-slate-600 dark:text-gray-400 space-y-3">
+          <p>AI チャットでの質問・回答は Surge のデータベースに保存され、以下の目的で利用されます:</p>
           <ul class="list-none space-y-1 text-xs">
-            <li>✓ あなた自身の閲覧・分析</li>
-            <li>✗ 他の利用者には表示されません</li>
+            <li>✓ あなた自身のチャット履歴の閲覧</li>
+            <li>✓ 利用上限・コスト管理</li>
+            <li>✓ 不具合調査・サービス改善</li>
           </ul>
-          <p class="text-[11px] text-slate-400 dark:text-gray-500 pt-2">※ あなたのノートはあなた自身の分析のために保存されます。</p>
+          <p class="text-xs">質問本文は Google Gemini API にも送信されます<br>（Google のプライバシーポリシーに準拠）。</p>
+          <div class="pt-1 space-y-1 text-xs text-amber-600 dark:text-amber-400">
+            <p>⚠️ 個人情報・機密情報は入力しないでください。</p>
+            <p>⚠️ 投資判断は自己責任でお願いします。</p>
+          </div>
         </div>
         <button onclick="submitConsent()" class="w-full mt-5 px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 cursor-pointer">同意してはじめる</button>
       </div>
