@@ -9,9 +9,20 @@ on orchestration and so that ticker sources can be mocked in tests.
 """
 
 import io
+import re
 
 import pandas as pd
 import requests
+
+
+# Valid TSE security code: 4 characters, digits or uppercase letters, must
+# contain at least one digit. Accepts both legacy numeric codes like "7203"
+# and the new alphanumeric format like "285A" (e.g. キオクシアホールディングス).
+_TSE_CODE_RE = re.compile(r"^(?=.*\d)[0-9A-Z]{4}$")
+
+
+def _is_valid_tse_code(code: str) -> bool:
+    return bool(_TSE_CODE_RE.match(code))
 
 
 def get_sp500_tickers():
@@ -62,6 +73,10 @@ def get_nasdaq100_tickers():
 def get_nikkei225_tickers():
     """Fetch Nikkei 225 constituent tickers from Wikipedia (Japanese).
 
+    Accepts both legacy numeric codes (e.g. ``7203``) and the new TSE
+    alphanumeric format (e.g. ``285A`` for キオクシアホールディングス).
+    Deduplicates across historical sub-tables on the page.
+
     Returns (tickers, sectors, names) where names maps ticker -> Japanese name.
     """
     url = "https://ja.wikipedia.org/wiki/日経平均株価"
@@ -70,14 +85,18 @@ def get_nikkei225_tickers():
     resp.raise_for_status()
     tables = pd.read_html(io.StringIO(resp.text))
     tickers = []
+    seen = set()
     names = {}
     for table in tables:
         cols = [str(c) for c in table.columns]
         if "証券コード" in cols and "銘柄" in cols:
             for _, row in table.iterrows():
-                code = str(row["証券コード"]).strip()
-                if code.isdigit():
+                code = str(row["証券コード"]).strip().upper()
+                if _is_valid_tse_code(code):
                     t = code + ".T"
+                    if t in seen:
+                        continue
+                    seen.add(t)
                     tickers.append(t)
                     names[t] = str(row["銘柄"]).strip()
     if not tickers:
@@ -89,6 +108,8 @@ def get_nikkei225_tickers():
 
 def get_growth250_tickers():
     """Fetch TSE Growth Market 250 constituent tickers from Wikipedia.
+
+    Accepts both legacy numeric codes and alphanumeric TSE codes.
 
     Returns (tickers, sectors, names).
     """
@@ -103,8 +124,8 @@ def get_growth250_tickers():
         cols = [str(c) for c in table.columns]
         if "コード" in cols and "銘柄名" in cols:
             for _, row in table.iterrows():
-                code = str(row["コード"]).strip()
-                if code.isdigit() and len(code) == 4:
+                code = str(row["コード"]).strip().upper()
+                if _is_valid_tse_code(code):
                     t = code + ".T"
                     tickers.append(t)
                     names[t] = str(row["銘柄名"]).strip()
