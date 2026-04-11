@@ -48,6 +48,7 @@ from auth_service import (
 import notes_service
 import rate_limit_service
 import llm_service
+import scheduler_service
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "surge-dev-fallback-key-change-in-prod")
@@ -486,6 +487,34 @@ def start_screening():
     _screening_thread.start()
 
     return jsonify({"status": "started", "index": index, "top_n": top_n})
+
+
+def _trigger_scheduled_screening(index_key, label):
+    """Called by scheduler_service at each slot fire time.
+
+    Skips quietly if a screening is already running so we don't stomp a
+    manual run or an overlapping scheduled run.
+    """
+    global _screening_thread
+    with _lock:
+        if _state["running"] and _screening_thread is not None and _screening_thread.is_alive():
+            print(f"[scheduler] {label}: skipped — screening already running")
+            return
+        # Reset any stale state
+        if _state["running"]:
+            _state["running"] = False
+            _state["error"] = None
+    top_n = _state.get("last_top_n") or 20
+    print(f"[scheduler] {label}: starting {index_key} (top_n={top_n})")
+    _screening_thread = threading.Thread(
+        target=_run_screening_job, args=(index_key, top_n), daemon=True
+    )
+    _screening_thread.start()
+
+
+# Start the scheduler once at import time. Safe to call multiple times
+# (scheduler_service guards against double-start).
+scheduler_service.start_scheduler(_trigger_scheduled_screening)
 
 
 @app.get("/api/status")
