@@ -3429,6 +3429,20 @@ async function confirmSaveNote() {
 
 // ── Notes Drawer ─────────────────────────────────────────────────────
 
+// Small helper: HTML-escape user content before inserting into innerHTML.
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+let _activeTagFilter = null;
+let _currentNoteDetail = null;
+
 async function openNotesDrawer() {
   document.getElementById('notesDrawer').classList.remove('hidden');
   document.getElementById('notesDrawer').classList.add('flex');
@@ -3445,46 +3459,101 @@ async function loadNotes() {
     const resp = await fetch('/api/notes?limit=100');
     if (!resp.ok) return;
     notesList = await resp.json();
-    renderNotesList(notesList);
+    renderTagFilterBar();
+    applyNotesFilters();
   } catch (e) {}
+}
+
+// Collect all unique tags across notes, sorted by frequency (desc) then alphabetically.
+function renderTagFilterBar() {
+  const bar = document.getElementById('tagFilterBar');
+  const chips = document.getElementById('tagFilterChips');
+  if (!bar || !chips) return;
+  const freq = new Map();
+  (notesList || []).forEach(n => {
+    (n.tags || []).forEach(t => {
+      if (!t) return;
+      freq.set(t, (freq.get(t) || 0) + 1);
+    });
+  });
+  if (freq.size === 0) {
+    bar.classList.add('hidden');
+    chips.innerHTML = '';
+    return;
+  }
+  bar.classList.remove('hidden');
+  const sorted = [...freq.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const activeCls = 'bg-primary-500 text-white border-primary-500';
+  const inactiveCls = 'bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-300 border-transparent hover:border-primary-400';
+  let html = '';
+  if (_activeTagFilter) {
+    html += `<button onclick="clearTagFilter()" class="text-[10px] px-2 py-0.5 rounded-full border border-rose-300 dark:border-rose-800 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer">× 解除</button>`;
+  }
+  html += sorted.map(([tag, count]) => {
+    const isActive = _activeTagFilter === tag;
+    return `<button onclick="toggleTagFilter('${escapeHtml(tag).replace(/'/g, "\\'")}')" class="text-[10px] px-2 py-0.5 rounded-full border cursor-pointer transition-colors ${isActive ? activeCls : inactiveCls}">#${escapeHtml(tag)} <span class="opacity-60">${count}</span></button>`;
+  }).join('');
+  chips.innerHTML = html;
+}
+
+function toggleTagFilter(tag) {
+  _activeTagFilter = (_activeTagFilter === tag) ? null : tag;
+  renderTagFilterBar();
+  applyNotesFilters();
+}
+
+function clearTagFilter() {
+  _activeTagFilter = null;
+  renderTagFilterBar();
+  applyNotesFilters();
+}
+
+// Apply current search query + tag filter to notesList, then render.
+function applyNotesFilters() {
+  const q = (document.getElementById('notesSearchInput')?.value || '').toLowerCase();
+  let filtered = notesList || [];
+  if (_activeTagFilter) {
+    filtered = filtered.filter(n => (n.tags || []).includes(_activeTagFilter));
+  }
+  if (q) {
+    filtered = filtered.filter(n =>
+      (n.title || '').toLowerCase().includes(q) ||
+      (n.answer || '').toLowerCase().includes(q) ||
+      (n.question || '').toLowerCase().includes(q) ||
+      (n.tickers || []).some(t => t.toLowerCase().includes(q)) ||
+      (n.tags || []).some(t => t.toLowerCase().includes(q))
+    );
+  }
+  renderNotesList(filtered);
 }
 
 function renderNotesList(notes) {
   const container = document.getElementById('notesList');
   if (!notes || notes.length === 0) {
-    container.innerHTML = '<div class="text-center text-xs text-slate-400 dark:text-gray-500 py-8">まだノートがありません<br>AIとチャットして「📌 保存」で作成してください</div>';
+    const msg = _activeTagFilter
+      ? `このタグに該当するノートがありません<br><button onclick="clearTagFilter()" class="text-primary-500 hover:underline mt-2">タグフィルタを解除</button>`
+      : 'まだノートがありません<br>AIとチャットして「📌 保存」で作成してください';
+    container.innerHTML = `<div class="text-center text-xs text-slate-400 dark:text-gray-500 py-8">${msg}</div>`;
     return;
   }
   container.innerHTML = notes.map(n => {
-    const preview = (n.answer || '').slice(0, 100);
-    const tickers = (n.tickers || []).slice(0, 3).map(t => `<span class="text-[10px] px-1.5 py-0.5 bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 rounded-full font-mono">${t}</span>`).join('');
-    const tags = (n.tags || []).slice(0, 3).map(t => `<span class="text-[10px] px-1.5 py-0.5 bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 rounded-full">#${t}</span>`).join('');
+    const preview = (n.answer || '').replace(/[*_`#]/g, '').slice(0, 100);
+    const tickers = (n.tickers || []).slice(0, 3).map(t => `<span class="text-[10px] px-1.5 py-0.5 bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 rounded-full font-mono">${escapeHtml(t)}</span>`).join('');
+    const tags = (n.tags || []).slice(0, 3).map(t => `<span class="text-[10px] px-1.5 py-0.5 bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 rounded-full">#${escapeHtml(t)}</span>`).join('');
     const pinIcon = n.is_pinned ? '📌 ' : '';
     return `<div onclick="openNote(${n.id})" class="p-3 rounded-xl border border-slate-200 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors">
       <div class="flex items-start justify-between gap-2 mb-1">
-        <h3 class="text-sm font-semibold text-slate-900 dark:text-gray-100 line-clamp-1 flex-1">${pinIcon}${n.title}</h3>
-        <span class="text-[10px] text-slate-400 dark:text-gray-500 shrink-0">${(n.created_at || '').slice(0, 10)}</span>
+        <h3 class="text-sm font-semibold text-slate-900 dark:text-gray-100 line-clamp-1 flex-1">${pinIcon}${escapeHtml(n.title)}</h3>
+        <span class="text-[10px] text-slate-400 dark:text-gray-500 shrink-0">${escapeHtml((n.created_at || '').slice(0, 10))}</span>
       </div>
-      <p class="text-xs text-slate-500 dark:text-gray-400 line-clamp-2 mb-2">${preview}</p>
+      <p class="text-xs text-slate-500 dark:text-gray-400 line-clamp-2 mb-2">${escapeHtml(preview)}</p>
       <div class="flex items-center gap-1 flex-wrap">${tickers}${tags}</div>
     </div>`;
   }).join('');
 }
 
 function filterNotes(query) {
-  const q = (query || '').toLowerCase();
-  if (!q) {
-    renderNotesList(notesList);
-    return;
-  }
-  const filtered = notesList.filter(n =>
-    (n.title || '').toLowerCase().includes(q) ||
-    (n.answer || '').toLowerCase().includes(q) ||
-    (n.question || '').toLowerCase().includes(q) ||
-    (n.tickers || []).some(t => t.toLowerCase().includes(q)) ||
-    (n.tags || []).some(t => t.toLowerCase().includes(q))
-  );
-  renderNotesList(filtered);
+  applyNotesFilters();
 }
 
 let _currentViewNoteId = null;
@@ -3495,27 +3564,111 @@ async function openNote(noteId) {
     if (!resp.ok) return;
     const n = await resp.json();
     _currentViewNoteId = noteId;
+    _currentNoteDetail = n;
     document.getElementById('noteDetailTitle').textContent = (n.is_pinned ? '📌 ' : '') + n.title;
-    const content = document.getElementById('noteDetailContent');
-    const tickersHtml = (n.tickers || []).map(t => `<span class="text-xs px-2 py-0.5 bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 rounded-full font-mono">${t}</span>`).join('');
-    const tagsHtml = (n.tags || []).map(t => `<span class="text-xs px-2 py-0.5 bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 rounded-full">#${t}</span>`).join('');
-    content.innerHTML = `
-      <div class="flex flex-wrap gap-1 mb-3">${tickersHtml}${tagsHtml}</div>
-      <div class="text-[11px] text-slate-400 dark:text-gray-500 mb-3">${n.created_at} · ${n.llm_model || ''}</div>
-      ${n.question ? `<div class="bg-slate-50 dark:bg-gray-800 rounded-lg p-3 mb-3">
-        <div class="text-[10px] text-slate-400 mb-1">質問</div>
-        <div class="text-sm text-slate-700 dark:text-gray-300 whitespace-pre-wrap">${n.question}</div>
-      </div>` : ''}
-      <div>
-        <div class="text-[10px] text-slate-400 mb-1">回答</div>
-        <div class="text-sm text-slate-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">${n.answer}</div>
-      </div>
-    `;
+    renderNoteDetailBody();
     document.getElementById('noteDetailPinBtn').onclick = () => togglePinNote(noteId);
     document.getElementById('noteDetailPinBtn').textContent = n.is_pinned ? '📌 ピン留め解除' : '📌 ピン留め';
     document.getElementById('noteDetailDeleteBtn').onclick = () => deleteNote(noteId);
     document.getElementById('noteDetailModal').classList.remove('hidden');
     document.getElementById('noteDetailModal').classList.add('flex');
+  } catch (e) {}
+}
+
+// Renders the content body of the note detail modal. Reads from _currentNoteDetail.
+function renderNoteDetailBody() {
+  const n = _currentNoteDetail;
+  if (!n) return;
+  const content = document.getElementById('noteDetailContent');
+  const tickersHtml = (n.tickers || []).map(t =>
+    `<span class="text-xs px-2 py-0.5 bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 rounded-full font-mono">${escapeHtml(t)}</span>`
+  ).join('');
+  const tagsHtml = (n.tags || []).map(t => {
+    const safeTag = escapeHtml(t);
+    const safeJs = safeTag.replace(/'/g, "\\'");
+    return `<span class="group inline-flex items-center gap-0.5 text-xs pl-2 pr-1 py-0.5 bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-300 rounded-full">
+      #${safeTag}
+      <button onclick="removeTagFromNote('${safeJs}')" title="タグを削除" class="w-4 h-4 flex items-center justify-center rounded-full text-slate-400 hover:text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-950/30 cursor-pointer">×</button>
+    </span>`;
+  }).join('');
+  const questionBlock = n.question ? `<div class="bg-slate-50 dark:bg-gray-800 rounded-lg p-3 mb-3">
+    <div class="text-[10px] text-slate-400 mb-1">質問</div>
+    <div class="text-sm text-slate-700 dark:text-gray-300 whitespace-pre-wrap">${escapeHtml(n.question)}</div>
+  </div>` : '';
+  const answerHtml = renderChatMarkdown(n.answer || '');
+  content.innerHTML = `
+    <div class="flex flex-wrap items-center gap-1 mb-3">
+      ${tickersHtml}
+      ${tagsHtml}
+      <button onclick="showAddTagInput()" class="text-xs px-2 py-0.5 rounded-full border border-dashed border-slate-300 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:border-primary-500 hover:text-primary-500 cursor-pointer">+ タグ追加</button>
+    </div>
+    <div id="addTagInputWrap" class="hidden mb-3 flex items-center gap-2">
+      <input id="addTagInput" type="text" placeholder="新しいタグ..." maxlength="30"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();confirmAddTag();}else if(event.key==='Escape'){hideAddTagInput();}"
+        class="flex-1 text-xs rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1 focus:ring-2 focus:ring-primary-500/50 outline-none">
+      <button onclick="confirmAddTag()" class="text-xs px-2 py-1 rounded-lg bg-primary-500 text-white hover:bg-primary-600 cursor-pointer">追加</button>
+      <button onclick="hideAddTagInput()" class="text-xs px-2 py-1 rounded-lg border border-slate-200 dark:border-gray-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer">キャンセル</button>
+    </div>
+    <div class="text-[11px] text-slate-400 dark:text-gray-500 mb-3">${escapeHtml(n.created_at || '')} · ${escapeHtml(n.llm_model || '')}</div>
+    ${questionBlock}
+    <div>
+      <div class="text-[10px] text-slate-400 mb-1">回答</div>
+      <div class="text-sm text-slate-700 dark:text-gray-300 leading-relaxed note-answer-body">${answerHtml}</div>
+    </div>
+  `;
+}
+
+function showAddTagInput() {
+  const wrap = document.getElementById('addTagInputWrap');
+  if (!wrap) return;
+  wrap.classList.remove('hidden');
+  wrap.classList.add('flex');
+  const input = document.getElementById('addTagInput');
+  input.value = '';
+  input.focus();
+}
+
+function hideAddTagInput() {
+  const wrap = document.getElementById('addTagInputWrap');
+  if (!wrap) return;
+  wrap.classList.add('hidden');
+  wrap.classList.remove('flex');
+}
+
+async function confirmAddTag() {
+  const input = document.getElementById('addTagInput');
+  if (!input || !_currentNoteDetail) return;
+  const newTag = (input.value || '').trim();
+  if (!newTag) { hideAddTagInput(); return; }
+  const existing = _currentNoteDetail.tags || [];
+  if (existing.includes(newTag)) { hideAddTagInput(); return; }
+  const nextTags = [...existing, newTag];
+  await updateNoteTags(nextTags);
+  hideAddTagInput();
+}
+
+async function removeTagFromNote(tag) {
+  if (!_currentNoteDetail) return;
+  const nextTags = (_currentNoteDetail.tags || []).filter(t => t !== tag);
+  await updateNoteTags(nextTags);
+}
+
+async function updateNoteTags(nextTags) {
+  if (!_currentViewNoteId) return;
+  try {
+    const resp = await fetch(`/api/notes/${_currentViewNoteId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: nextTags }),
+    });
+    if (!resp.ok) return;
+    _currentNoteDetail.tags = nextTags;
+    // Update the in-memory notesList too so the drawer reflects changes without reload
+    const idx = (notesList || []).findIndex(n => n.id === _currentViewNoteId);
+    if (idx >= 0) notesList[idx].tags = nextTags;
+    renderNoteDetailBody();
+    renderTagFilterBar();
+    applyNotesFilters();
   } catch (e) {}
 }
 

@@ -825,6 +825,12 @@
             class="w-full rounded-lg border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 px-3 py-1.5 text-xs focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 outline-none"
             oninput="filterNotes(event.target.value)">
         </div>
+        <div id="tagFilterBar" class="px-4 py-2 border-b border-slate-100 dark:border-gray-800 shrink-0 hidden">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-[10px] text-slate-400 dark:text-gray-500 shrink-0">🏷️ タグ:</span>
+            <div id="tagFilterChips" class="flex gap-1 flex-wrap"></div>
+          </div>
+        </div>
         <div id="notesList" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
       </div>
     </div>
