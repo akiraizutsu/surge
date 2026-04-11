@@ -545,7 +545,7 @@ TOOL_DECLARATIONS = {
     ),
     "search_web_sentiment": _decl(
         "search_web_sentiment",
-        "[オーナー専用] Google Search を使って最新のニュースやセンチメントを取得する。",
+        "Google Search を使って最新のニュースやセンチメントを取得する。Surge DB に載っていない情報（決算発表・開示資料・市場トピックなど）を調べる時に使う。",
         {"query": {"type": "string"}},
         required=["query"],
     ),

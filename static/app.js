@@ -2953,7 +2953,6 @@ async function fetchCurrentUser() {
       document.getElementById('consentModal')?.classList.remove('hidden');
       document.getElementById('consentModal')?.classList.add('flex');
     }
-    // Show Pro mode toggle for owner
     if (currentUser.role === 'owner') {
       const toggle = document.getElementById('proModeToggle');
       if (toggle) {

@@ -73,6 +73,11 @@
       <nav class="sticky top-24 space-y-1">
         <p class="text-[10px] font-semibold text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-3">目次</p>
         <a href="#overview"    class="toc-link block py-1">概要</a>
+        <p class="text-[10px] font-semibold text-primary-500 uppercase tracking-widest mt-4 mb-2">AI機能 🤖</p>
+        <a href="#chatbot"     class="toc-link block py-1">🤖 AIロボちゃん</a>
+        <a href="#notes"       class="toc-link block py-1">📓 調査ノート</a>
+        <a href="#usermenu"    class="toc-link block py-1">👤 ユーザーメニュー</a>
+        <p class="text-[10px] font-semibold text-slate-400 dark:text-gray-500 uppercase tracking-widest mt-4 mb-2">スクリーニング</p>
         <a href="#screening"   class="toc-link block py-1">スクリーニング実行</a>
         <a href="#score"       class="toc-link block py-1">モメンタムスコア</a>
         <a href="#subtabs"     class="toc-link block py-1">分析タブ一覧</a>
@@ -119,6 +124,185 @@
             <div class="text-2xl mb-2">🇺🇸</div>
             <h3 class="font-semibold mb-1">米国株ページ <code class="text-xs bg-slate-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">/us</code></h3>
             <p class="text-sm text-slate-500 dark:text-gray-400">S&P 500・NASDAQ 100。ショートスクイーズ・EPS改定・機関投資家フロー・決算後ドリフトを分析。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- AI Chat Bot -->
+      <section id="chatbot" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800 flex items-center gap-2">
+          🤖 銘柄分析ロボちゃん（AIチャット）
+          <span class="badge bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400">NEW</span>
+        </h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-6 space-y-5">
+          <p class="text-sm text-slate-600 dark:text-gray-400">
+            画面右下の <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary-500 text-white text-xs">🤖</span> アイコンをクリックするとチャットパネルが開きます。<strong>Gemini 2.5 Flash</strong> が本システムのデータベースを直接参照し、さらに必要に応じて外部APIやWebから最新情報を取得しながら、対話形式で銘柄について答えてくれます。
+          </p>
+
+          <!-- Info Sources -->
+          <div class="p-4 bg-slate-50 dark:bg-gray-800/50 rounded-xl">
+            <p class="text-xs font-semibold text-slate-700 dark:text-gray-300 mb-2 uppercase tracking-wider">🧠 情報源</p>
+            <ul class="text-xs text-slate-600 dark:text-gray-400 space-y-1.5 list-disc pl-5">
+              <li><strong>Surge の DB（一次情報）</strong> — 直近のスクリーニング結果・テクニカル指標・ファンダ・レジーム・セクターローテーション</li>
+              <li><strong>EDINET DB API</strong> — 日本株の CF・財務データ（<code class="bg-white dark:bg-gray-900 px-1 rounded">get_cf_pattern_stocks</code> ツール経由）</li>
+              <li><strong>Google Search（Web検索）</strong> — 最新ニュース・市場センチメント・開示情報（<code class="bg-white dark:bg-gray-900 px-1 rounded">search_web_sentiment</code> ツール経由、必要に応じて AI が判断して実行）</li>
+              <li><strong>Gemini の事前学習知識</strong> — 企業概要・業界構造・会計用語・マクロ経済など一般的な金融知識</li>
+            </ul>
+            <p class="text-[11px] text-slate-500 dark:text-gray-500 mt-2">💡 AI は「Surge の数値で客観的に答えるべきか」「最新ニュースが必要か」を自分で判断し、適切な情報源を選んで回答します。</p>
+          </div>
+
+          <!-- How to Open -->
+          <div class="grid sm:grid-cols-3 gap-3">
+            <div class="flex items-start gap-3 p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <span class="flex-shrink-0 w-6 h-6 bg-primary-500 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
+              <p class="text-xs text-slate-600 dark:text-gray-400"><strong>🤖 ボタン</strong>をクリックしてパネルを開く</p>
+            </div>
+            <div class="flex items-start gap-3 p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <span class="flex-shrink-0 w-6 h-6 bg-primary-500 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
+              <p class="text-xs text-slate-600 dark:text-gray-400">質問を入力して<strong>送信</strong>（Enter または送信ボタン）</p>
+            </div>
+            <div class="flex items-start gap-3 p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <span class="flex-shrink-0 w-6 h-6 bg-primary-500 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
+              <p class="text-xs text-slate-600 dark:text-gray-400">回答の <strong>📌 保存</strong> で調査ノート化</p>
+            </div>
+          </div>
+
+          <!-- Example Questions -->
+          <div>
+            <p class="text-xs font-semibold text-slate-700 dark:text-gray-300 mb-2 uppercase tracking-wider">質問例</p>
+            <div class="grid sm:grid-cols-2 gap-2 text-xs">
+              <div class="p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg border-l-2 border-primary-500">💬 「SP500の上位5銘柄を教えて」</div>
+              <div class="p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg border-l-2 border-primary-500">💬 「AAPLの詳細を見せて」</div>
+              <div class="p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg border-l-2 border-primary-500">💬 「NASDAQで RSI 70以下 かつ スコア90以上」</div>
+              <div class="p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg border-l-2 border-primary-500">💬 「今の日経225のレジームは？」</div>
+              <div class="p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg border-l-2 border-primary-500">💬 「MSFT と GOOGL と AMZN を比較して」</div>
+              <div class="p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg border-l-2 border-primary-500">💬 「TSLA に似た銘柄を探して」</div>
+            </div>
+          </div>
+
+          <!-- Tools -->
+          <div>
+            <p class="text-xs font-semibold text-slate-700 dark:text-gray-300 mb-2 uppercase tracking-wider">AIが使える機能（Tool Use）</p>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead class="text-[10px] text-slate-400 dark:text-gray-500 uppercase">
+                  <tr><th class="text-left py-1 pr-3">ツール</th><th class="text-left py-1 pr-3">情報源</th><th class="text-left py-1">内容</th></tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-gray-800">
+                  <tr><td class="py-2 pr-3 font-medium whitespace-nowrap">📊 ランキング取得</td><td class="py-2 pr-3 text-slate-400 dark:text-gray-500">Surge DB</td><td class="py-2 text-slate-500 dark:text-gray-400">指定インデックスの上位N銘柄</td></tr>
+                  <tr><td class="py-2 pr-3 font-medium whitespace-nowrap">🔍 銘柄詳細</td><td class="py-2 pr-3 text-slate-400 dark:text-gray-500">Surge DB</td><td class="py-2 text-slate-500 dark:text-gray-400">全テクニカル指標・ファンダ・サポレジ</td></tr>
+                  <tr><td class="py-2 pr-3 font-medium whitespace-nowrap">🧮 条件フィルタ</td><td class="py-2 pr-3 text-slate-400 dark:text-gray-500">Surge DB</td><td class="py-2 text-slate-500 dark:text-gray-400">モメンタム / RSI / ADX / 時価総額で絞り込み</td></tr>
+                  <tr><td class="py-2 pr-3 font-medium whitespace-nowrap">🌡️ 市場レジーム</td><td class="py-2 pr-3 text-slate-400 dark:text-gray-500">Surge DB</td><td class="py-2 text-slate-500 dark:text-gray-400">相場地合い（強気/弱気/中立/分散）</td></tr>
+                  <tr><td class="py-2 pr-3 font-medium whitespace-nowrap">⚖️ 銘柄比較</td><td class="py-2 pr-3 text-slate-400 dark:text-gray-500">Surge DB</td><td class="py-2 text-slate-500 dark:text-gray-400">2〜5銘柄を並べて指標比較</td></tr>
+                  <tr><td class="py-2 pr-3 font-medium whitespace-nowrap">🔗 類似銘柄検索</td><td class="py-2 pr-3 text-slate-400 dark:text-gray-500">Surge DB</td><td class="py-2 text-slate-500 dark:text-gray-400">基準銘柄と似た特徴を持つ銘柄を発見</td></tr>
+                  <tr><td class="py-2 pr-3 font-medium whitespace-nowrap">💰 CFパターン検索 <span class="text-[9px] text-rose-400">JP</span></td><td class="py-2 pr-3 text-slate-400 dark:text-gray-500">EDINET API</td><td class="py-2 text-slate-500 dark:text-gray-400">キャッシュフロー特性で銘柄を絞り込み</td></tr>
+                  <tr><td class="py-2 pr-3 font-medium whitespace-nowrap">🔄 セクター回転</td><td class="py-2 pr-3 text-slate-400 dark:text-gray-500">Surge DB</td><td class="py-2 text-slate-500 dark:text-gray-400">セクター別平均リターン・加速/減速</td></tr>
+                  <tr><td class="py-2 pr-3 font-medium whitespace-nowrap">🌐 Web検索</td><td class="py-2 pr-3 text-slate-400 dark:text-gray-500">Google Search</td><td class="py-2 text-slate-500 dark:text-gray-400">最新ニュース・開示・市場センチメント</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Daily Limit -->
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div class="p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <p class="text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">🎫 利用制限</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">1日あたりのリクエスト回数に制限あり。パネル下部に「本日: N/N回」で残数表示。</p>
+            </div>
+            <div class="p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <p class="text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">🕛 リセット</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">毎日 <strong>0:00 JST</strong>（日本時間深夜0時）に自動リセット。</p>
+            </div>
+          </div>
+
+          <!-- Tips -->
+          <div class="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl text-xs text-amber-700 dark:text-amber-400">
+            <p class="font-semibold mb-1">💡 ヒント</p>
+            <ul class="space-y-1 list-disc pl-5">
+              <li>AI はまず<strong>スクリーニング済みデータ</strong>を参照します。事前に「スクリーニング実行」しておくと最新情報で回答できます</li>
+              <li>日本語で自然に質問 OK。ティッカーは <code class="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">AAPL</code> や <code class="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">7203.T</code> の形式</li>
+              <li>回答中に <strong>「📊 ランキングを確認しています...」</strong>のような進捗が表示されたら、AI が DB を検索している証拠</li>
+              <li>マークダウン記法（**太字** や箇条書き）もきれいにレンダリングされます</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Research Notes -->
+      <section id="notes" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800 flex items-center gap-2">
+          📓 調査ノート
+          <span class="badge bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400">NEW</span>
+        </h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-6 space-y-5">
+          <p class="text-sm text-slate-600 dark:text-gray-400">
+            銘柄の調査メモを保存する機能。ヘッダーの <code class="bg-slate-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs">📓 ノート</code> ボタンから一覧を開きます。AIチャットの回答をワンクリックでノート化できるのがポイント。
+          </p>
+
+          <!-- Features grid -->
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div class="p-4 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <p class="font-semibold text-sm mb-1">✍️ 作成</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">チャット回答の右下 <strong>📌 保存</strong> ボタンから、タイトル・タグ・関連銘柄つきで保存。</p>
+            </div>
+            <div class="p-4 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <p class="font-semibold text-sm mb-1">🔍 検索</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">ノート一覧上部の検索ボックスで<strong>タイトル・本文・タグ</strong>を全文検索。</p>
+            </div>
+            <div class="p-4 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <p class="font-semibold text-sm mb-1">📌 ピン留め</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">重要なノートをピン留めして一覧の<strong>最上部に固定</strong>。</p>
+            </div>
+            <div class="p-4 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <p class="font-semibold text-sm mb-1">🔐 プライバシー</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">あなたのノートは<strong>あなたのみ</strong>が閲覧可能。他の利用者には見えません。</p>
+            </div>
+          </div>
+
+          <!-- Use cases -->
+          <div>
+            <p class="text-xs font-semibold text-slate-700 dark:text-gray-300 mb-2 uppercase tracking-wider">活用シーン</p>
+            <ul class="text-xs text-slate-600 dark:text-gray-400 space-y-1.5 list-disc pl-5">
+              <li>AI との対話で見つけた有望銘柄の根拠をまとめて保存</li>
+              <li>エントリー候補・監視中の銘柄をタグ（例: <code class="bg-slate-100 dark:bg-gray-800 px-1 rounded">初動</code>, <code class="bg-slate-100 dark:bg-gray-800 px-1 rounded">長期保有</code>）で分類</li>
+              <li>過去に調べた銘柄を後から検索して再利用</li>
+              <li>決算発表前のチェックリストやメモ</li>
+            </ul>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- User Menu -->
+      <section id="usermenu" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800 flex items-center gap-2">
+          👤 ユーザーメニュー
+          <span class="badge bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400">NEW</span>
+        </h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-6 space-y-4">
+          <p class="text-sm text-slate-600 dark:text-gray-400">画面右上のアバターアイコン（🧑‍💻 / 👨 など）をクリックするとメニューが開きます。</p>
+
+          <div class="space-y-2">
+            <div class="flex items-start gap-3 p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <span class="text-lg">🔑</span>
+              <div>
+                <p class="text-sm font-semibold">パスワード変更</p>
+                <p class="text-xs text-slate-500 dark:text-gray-400">現在のパスワード + 新しいパスワード（4文字以上）を入力して更新します。初期パスワードを受け取った後、最初にやっておくのがおすすめ。</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-3 p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <span class="text-lg">🚪</span>
+              <div>
+                <p class="text-sm font-semibold">ログアウト</p>
+                <p class="text-xs text-slate-500 dark:text-gray-400">セッションを破棄してログイン画面に戻ります。共有端末での利用時は必ずログアウトしてください。</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Privacy explanation -->
+          <div class="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl text-xs text-amber-700 dark:text-amber-400">
+            <p class="font-semibold mb-1">🔐 プライバシーについて</p>
+            <p>あなたが作成した<strong>調査ノート</strong>は、あなた自身のみが閲覧できます。他のユーザーには表示されません。安心して分析メモを記録してください。</p>
           </div>
         </div>
       </section>
