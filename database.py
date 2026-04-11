@@ -293,24 +293,25 @@ def _add_column_if_missing(conn, table, column, col_type):
 
 
 def _seed_initial_users(conn):
-    """Seed initial users from SURGE_USERS env var on first init.
+    """Seed initial users from SURGE_USERS env var on every init.
 
-    Idempotent: skips any user whose username already exists.
-    Always seeds owner first (so id=1 → AKIRA for user_id DEFAULT 1 migration).
+    Additive and idempotent:
+    - Existing users' password/display_name/role are NEVER overwritten (INSERT OR IGNORE).
+    - Missing users (added to SURGE_USERS after initial deploy) are inserted on next init.
+    - If SURGE_USERS is unset AND the table is empty, creates a fallback akira/surge owner
+      so the app is not locked out on very first run.
     """
     import os
     import json as _json
     from werkzeug.security import generate_password_hash
 
-    # Check if any users exist — if so, skip seeding
-    existing = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()
-    if existing["c"] > 0:
-        return
-
     raw = os.environ.get("SURGE_USERS", "").strip()
+
+    # No SURGE_USERS: only create fallback if the table is completely empty
     if not raw:
-        # Fallback: create a default owner using SECRET_KEY-based initial password
-        # so the app doesn't lock itself out on first run
+        existing = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()
+        if existing["c"] > 0:
+            return
         conn.execute(
             "INSERT INTO users (username, password_hash, display_name, avatar_emoji, role) VALUES (?, ?, ?, ?, ?)",
             ("akira", generate_password_hash("surge"), "AKIRA", "🧑‍💻", "owner"),
@@ -323,7 +324,7 @@ def _seed_initial_users(conn):
         print(f"[seed] Failed to parse SURGE_USERS JSON: {e}")
         return
 
-    # Sort so owner comes first (id=1 → owner)
+    # Sort so owner comes first (so a fresh DB gets id=1 → owner)
     users_sorted = sorted(users, key=lambda u: 0 if u.get("role") == "owner" else 1)
 
     for u in users_sorted:
