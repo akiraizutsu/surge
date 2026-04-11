@@ -1,24 +1,8 @@
 """Tool definitions and implementations for Gemini function calling.
 
-All tools are read-only wrappers around existing database/screener data.
-Each tool has a declaration (schema) and an implementation function that
-takes (args, user_id) and returns a dict result.
-
-The 11 tools:
-  Friend + Owner (8):
-    1. get_ranking
-    2. get_stock_detail
-    3. filter_stocks
-    4. get_market_regime
-    5. compare_stocks
-    6. find_similar_stocks
-    7. get_cf_pattern_stocks (Japan only)
-    8. get_sector_rotation
-
-  Owner-only (3):
-    9. get_collective_notes
-    10. get_friends_activity_summary
-    11. search_web_sentiment (Google Search grounding)
+All tools are read-only wrappers around existing database / screener /
+yfinance data. Each tool has a declaration (schema) and an implementation
+function that takes (args, user_id) and returns a dict result.
 """
 
 import json
@@ -146,19 +130,167 @@ def _tool_get_stock_detail(args, user_id):
     if not ticker:
         return {"error": "ticker is required"}
     idx, stock = _find_stock_everywhere(ticker)
-    if not stock:
+    if stock:
+        return {"index": idx, "stock": _trim_stock(stock, "full"), "source": "surge_db"}
+    # Fallback: live yfinance fetch for stocks outside the top ~50
+    live = _fetch_stock_live(ticker)
+    if live.get("error"):
         return {
             "error": (
-                f"'{ticker}' not found in latest screening results. "
-                "This does NOT mean the stock is unlisted — Surge only stores the top "
-                "~50 momentum leaders per index. "
-                "To answer the user, try `search_web_sentiment` to look up the stock "
-                "and get the correct ticker and recent info."
+                f"'{ticker}' not found in Surge DB and live fetch failed: {live['error']}. "
+                "Ask the user for a ticker symbol (e.g. 285A.T for キオクシア) or "
+                "try searching for the company name."
             ),
-            "suggestion": "use search_web_sentiment",
-            "query": ticker,
         }
-    return {"index": idx, "stock": _trim_stock(stock, "full")}
+    return {"stock": live, "source": "live_yfinance"}
+
+
+def _tool_get_stock_live(args, user_id):
+    """Explicit live-fetch tool for any ticker, bypassing the DB entirely."""
+    ticker = (args.get("ticker") or "").strip()
+    if not ticker:
+        return {"error": "ticker is required"}
+    live = _fetch_stock_live(ticker)
+    if live.get("error"):
+        return live
+    return {"stock": live, "source": "live_yfinance"}
+
+
+# ── Live yfinance fetch ──────────────────────────────────────────────────
+#
+# Allows the AI to answer about any ticker that isn't in Surge's top-50
+# screened set. Computes a minimal subset of technical indicators
+# (ret_1m, ret_3m, RSI, MA deviation, 52w high/low, dist_from_high) plus
+# essential fundamentals from the yfinance Ticker.info block.
+#
+# The screener pipeline is NOT reused to keep latency low — a single
+# ticker fetch typically takes < 1s, which is tolerable in a chat turn.
+
+
+def _compute_rsi(closes, period=14):
+    if len(closes) < period + 1:
+        return None
+    deltas = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
+    gains = [max(d, 0) for d in deltas]
+    losses = [abs(min(d, 0)) for d in deltas]
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+    for i in range(period, len(deltas)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return round(100 - (100 / (1 + rs)), 2)
+
+
+def _pct_change(seq, lookback):
+    if len(seq) <= lookback:
+        return None
+    old = seq[-1 - lookback]
+    new = seq[-1]
+    if not old:
+        return None
+    return round((new - old) / old * 100, 2)
+
+
+def _fetch_stock_live(ticker):
+    """Fetch price history + info for any ticker via yfinance.
+
+    Returns a dict with the same shape as a trimmed screening result, or
+    {'error': ...} on failure. Handles both US tickers (AAPL) and Japan
+    tickers (7203.T, 285A.T — adds .T suffix automatically if missing).
+    """
+    try:
+        import yfinance as yf
+    except Exception as e:  # pragma: no cover — yfinance is a hard dep
+        return {"error": f"yfinance unavailable: {e}"}
+
+    raw = ticker.strip().upper()
+    # Auto-append .T for numeric/alphanumeric 4-char Japanese codes
+    # (matches the TSE code regex used in tickers_source.py)
+    import re as _re
+    if _re.match(r"^(?=.*\d)[0-9A-Z]{4}$", raw):
+        raw_with_t = raw + ".T"
+        candidates = [raw_with_t, raw]
+    else:
+        candidates = [raw]
+
+    for candidate in candidates:
+        try:
+            t = yf.Ticker(candidate)
+            hist = t.history(period="6mo")
+            if hist is None or len(hist) < 30:
+                continue
+            info = {}
+            try:
+                info = t.info or {}
+            except Exception:
+                info = {}
+
+            closes = [float(x) for x in hist["Close"].tolist() if x == x]  # drop NaN
+            if len(closes) < 30:
+                continue
+            current_price = closes[-1]
+            ret_1m = _pct_change(closes, 21)  # ~21 trading days
+            ret_3m = _pct_change(closes, 63)
+            rsi = _compute_rsi(closes)
+
+            # MA deviations
+            ma50 = sum(closes[-50:]) / min(50, len(closes))
+            ma50_dev = round((current_price - ma50) / ma50 * 100, 2) if ma50 else None
+            ma200_dev = None
+            if len(closes) >= 200:
+                ma200 = sum(closes[-200:]) / 200
+                ma200_dev = round((current_price - ma200) / ma200 * 100, 2) if ma200 else None
+
+            # 52w high/low from the 6mo window (approximation, not true 52w)
+            window_high = max(closes)
+            window_low = min(closes)
+            dist_from_high = round((current_price - window_high) / window_high * 100, 2) if window_high else None
+
+            # Volume ratio (5d / 20d)
+            volumes = [float(x) for x in hist["Volume"].tolist() if x == x]
+            vol_ratio = None
+            if len(volumes) >= 20:
+                vol_5d = sum(volumes[-5:]) / 5
+                vol_20d = sum(volumes[-20:]) / 20
+                vol_ratio = round(vol_5d / vol_20d, 2) if vol_20d else None
+
+            market_cap = info.get("marketCap")
+            name = (
+                info.get("longName")
+                or info.get("shortName")
+                or candidate
+            )
+            return {
+                "ticker": candidate,
+                "name": name,
+                "sector": info.get("sector"),
+                "industry": info.get("industry"),
+                "price": round(current_price, 2),
+                "ret_1m": ret_1m,
+                "ret_3m": ret_3m,
+                "rsi": rsi,
+                "ma50_dev": ma50_dev,
+                "ma200_dev": ma200_dev,
+                "vol_ratio": vol_ratio,
+                "high_6m": round(window_high, 2),
+                "low_6m": round(window_low, 2),
+                "dist_from_high": dist_from_high,
+                "market_cap_b": round(market_cap / 1e9, 2) if market_cap else None,
+                "pe_trailing": info.get("trailingPE"),
+                "pe_forward": info.get("forwardPE"),
+                "dividend_yield": info.get("dividendYield"),
+                "revenue_growth": info.get("revenueGrowth"),
+                "earnings_growth": info.get("earningsGrowth"),
+                "target_price": info.get("targetMeanPrice"),
+                "recommendation": info.get("recommendationKey"),
+                "note": "Live yfinance fetch (not in Surge screening DB; 52w replaced with 6mo window).",
+            }
+        except Exception as e:
+            continue
+    return {"error": f"could not fetch live data for '{ticker}' (tried: {', '.join(candidates)})"}
 
 
 _FILTER_OPS = {
@@ -449,18 +581,21 @@ def _tool_get_friends_activity_summary(args, user_id):
 
 
 def _tool_search_web_sentiment(args, user_id):
-    """Owner only — placeholder that instructs LLM to use web grounding.
+    """Placeholder that asks the LLM to use its own knowledge for web-like queries.
 
-    The actual grounding is enabled at the Gemini model level via
-    tools=[{'google_search': {}}]. This tool just validates permission
-    and returns a directive.
+    Surge does not currently wire up real Google Search grounding at the
+    Gemini level, so this tool is primarily informational — it returns a
+    directive that tells the model to fall back to its training-time
+    knowledge. For concrete Japanese company → ticker resolution, prefer
+    `get_stock_live` which does a live yfinance fetch.
     """
-    user = database.get_user_by_id(user_id)
-    if not user or user.get("role") != "owner":
-        return {"error": "permission denied: owner only"}
     query = args.get("query", "")
     return {
-        "note": "Web search grounding is enabled at the model level for owner tier. Use your web_search capability to answer the query.",
+        "note": (
+            "Surge 側では実際の Google 検索 API は呼び出されません。"
+            "モデルの事前学習知識から query に答えるか、"
+            "銘柄の場合は get_stock_live に切り替えてください。"
+        ),
         "query": query,
     }
 
@@ -492,10 +627,21 @@ TOOL_DECLARATIONS = {
         "get_stock_detail",
         "特定の銘柄の全テクニカル指標・ファンダメンタルズ・サポレジを取得する。"
         "ティッカー(例: AAPL, 7203.T, 285A.T)または会社名の部分一致で検索できる。"
-        "DB に無い場合は 'not found' エラーを返すが、これは未上場を意味しない—"
-        "上位 ~50 銘柄のみ保存されているため。その場合は search_web_sentiment を使うこと。",
+        "DB（上位~50銘柄）に無い場合は自動的に yfinance のライブデータを取得して返す。"
+        "返却値の `source` フィールドで 'surge_db' か 'live_yfinance' か判別可能。",
         {
             "ticker": {"type": "string", "description": "ティッカー（AAPL, 7203.T, 285A.T など）または会社名の一部"},
+        },
+        required=["ticker"],
+    ),
+    "get_stock_live": _decl(
+        "get_stock_live",
+        "任意のティッカーの最新データを yfinance からリアルタイム取得する。"
+        "Surge DB の上位銘柄以外（中小型株、新規上場銘柄など）を調べたい時に使う。"
+        "価格、RSI、1/3ヶ月リターン、MA乖離、出来高比、時価総額、PER、アナリスト目標価格を返す。"
+        "日本株は 4 文字の英数字コード（例: 7203 または 285A）でも OK、自動的に .T を付与する。",
+        {
+            "ticker": {"type": "string", "description": "ティッカー（AAPL, 7203.T, 285A, TSLA など）"},
         },
         required=["ticker"],
     ),
@@ -584,6 +730,7 @@ TOOL_DECLARATIONS = {
 TOOL_IMPLS = {
     "get_ranking": _tool_get_ranking,
     "get_stock_detail": _tool_get_stock_detail,
+    "get_stock_live": _tool_get_stock_live,
     "filter_stocks": _tool_filter_stocks,
     "get_market_regime": _tool_get_market_regime,
     "compare_stocks": _tool_compare_stocks,
