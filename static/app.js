@@ -3209,6 +3209,8 @@ function humanizeToolCall(name, args) {
       return `📊 ${indexName || 'インデックス'}の最新ランキングを確認しています...`;
     case 'get_stock_detail':
       return `🔍 ${a.ticker || '銘柄'}の詳細データを取得中...`;
+    case 'get_stock_live':
+      return `📡 ${a.ticker || '銘柄'}の最新マーケットデータを取得中...`;
     case 'filter_stocks':
       return `🧮 ${indexName || 'マーケット'}から条件に合う銘柄を絞り込み中...`;
     case 'get_market_regime':
@@ -3241,8 +3243,6 @@ function appendToolCallIndicator(name, args) {
   const badge = document.createElement('div');
   badge.className = 'text-[11px] px-3 py-1.5 rounded-full bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 italic flex items-center gap-1.5';
   badge.textContent = humanizeToolCall(name, args);
-  // Small secondary tooltip with raw info for debugging
-  badge.title = `${name}(${JSON.stringify(args || {})})`;
   el.appendChild(badge);
   container.appendChild(el);
   container.scrollTop = container.scrollHeight;
