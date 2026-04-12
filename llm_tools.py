@@ -580,6 +580,55 @@ def _tool_get_friends_activity_summary(args, user_id):
     }
 
 
+def _tool_conclude_investigation(args, user_id):
+    """Save the agent's investigation conclusion as a research note."""
+    title = (args.get("title") or "仮説検証結果").strip()
+    verdict = args.get("verdict", "inconclusive")
+    summary = args.get("summary", "")
+    evidence = args.get("evidence") or []
+    related_tickers = args.get("related_tickers") or []
+    next_steps = args.get("next_steps", "")
+
+    verdict_labels = {
+        "supported": "✅ 支持される",
+        "partially_supported": "⚠️ 部分的に支持",
+        "not_supported": "❌ 支持されない",
+        "inconclusive": "❓ 判断不能",
+    }
+    verdict_label = verdict_labels.get(verdict, verdict)
+
+    # Build markdown body
+    lines = [f"## 検証結果: {verdict_label}", "", summary, "", "## 根拠"]
+    for e in evidence:
+        icon = "✅" if e.get("supports_hypothesis") else "⚠️"
+        lines.append(f"- {icon} **{e.get('source', '')}**: {e.get('finding', '')}")
+    if next_steps:
+        lines.append("")
+        lines.append(f"## 今後のウォッチポイント")
+        lines.append(next_steps)
+
+    answer_md = "\n".join(lines)
+    tags = ["agent", "hypothesis", verdict]
+
+    note_id = notes_service.create_note(
+        user_id=user_id,
+        title=title,
+        question="",
+        answer=answer_md,
+        tickers=related_tickers,
+        tags=tags,
+        llm_model="agent",
+    )
+
+    return {
+        "status": "saved",
+        "note_id": note_id,
+        "title": title,
+        "verdict": verdict,
+        "verdict_label": verdict_label,
+    }
+
+
 def _tool_search_web_sentiment(args, user_id):
     """Placeholder that asks the LLM to use its own knowledge for web-like queries.
 
@@ -724,6 +773,30 @@ TOOL_DECLARATIONS = {
         {"query": {"type": "string"}},
         required=["query"],
     ),
+    "conclude_investigation": _decl(
+        "conclude_investigation",
+        "調査が十分に完了したと判断した時に呼び出す。仮説の検証結果を構造化してまとめ、調査ノートに保存する。",
+        {
+            "title": {"type": "string", "description": "調査ノートのタイトル（例: '半導体セクター資金流入仮説の検証'）"},
+            "verdict": {"type": "string", "enum": ["supported", "partially_supported", "not_supported", "inconclusive"], "description": "仮説の検証結果"},
+            "summary": {"type": "string", "description": "検証結果の要約（3〜5文）"},
+            "evidence": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "source": {"type": "string", "description": "データソース"},
+                        "finding": {"type": "string", "description": "発見事項"},
+                        "supports_hypothesis": {"type": "boolean"},
+                    },
+                },
+                "description": "各調査ステップで得られた根拠のリスト",
+            },
+            "related_tickers": {"type": "array", "items": {"type": "string"}, "description": "関連銘柄コードのリスト"},
+            "next_steps": {"type": "string", "description": "今後のウォッチポイントや追加調査の提案"},
+        },
+        required=["title", "verdict", "summary", "evidence", "related_tickers"],
+    ),
 }
 
 
@@ -740,6 +813,7 @@ TOOL_IMPLS = {
     "get_collective_notes": _tool_get_collective_notes,
     "get_friends_activity_summary": _tool_get_friends_activity_summary,
     "search_web_sentiment": _tool_search_web_sentiment,
+    "conclude_investigation": _tool_conclude_investigation,
 }
 
 

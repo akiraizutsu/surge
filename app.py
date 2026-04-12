@@ -258,6 +258,37 @@ def api_chat():
     )
 
 
+# ── Agent API ─────────────────────────────────────────────────────────────
+
+@app.post("/api/agent")
+def api_agent():
+    """Hypothesis investigation agent. Returns NDJSON stream."""
+    uid = current_user_id()
+    if uid is None:
+        return jsonify({"error": "not logged in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    hypothesis = (data.get("hypothesis") or "").strip()
+    market = data.get("market", "jp")
+
+    if not hypothesis:
+        return jsonify({"error": "hypothesis is required"}), 400
+
+    def generate():
+        try:
+            ai = llm_service.AnalystAI(user_id=uid)
+            for chunk in ai.run_agent(hypothesis, market=market):
+                yield json.dumps(chunk, ensure_ascii=False) + "\n"
+        except Exception as e:
+            yield json.dumps({"type": "error", "error": f"agent failed: {type(e).__name__}: {e}"}, ensure_ascii=False) + "\n"
+
+    return app.response_class(
+        generate(),
+        mimetype="application/x-ndjson",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
+
+
 # ── Admin API (owner only) ─────────────────────────────────────────────
 
 @app.get("/api/admin/users")

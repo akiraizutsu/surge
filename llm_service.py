@@ -32,6 +32,7 @@ FRIEND_TOOLS = [
     "get_cf_pattern_stocks",
     "get_sector_rotation",
     "search_web_sentiment",
+    "conclude_investigation",
 ]
 
 # Privacy-sensitive tools that read across users — restricted to owner.
@@ -118,6 +119,32 @@ OWNER_SYSTEM_PROMPT = FRIEND_SYSTEM_PROMPT + """
 
 ユーザー（AKIRA）は友人3人とシステムを共有しているため、他ユーザーの調査を参考にして回答に深みを加えてください。
 """
+
+
+AGENT_SYSTEM_PROMPT_ADDON = """
+
+## 投資仮説検証エージェントモード
+
+あなたは現在、投資仮説検証エージェントとして動作しています。
+
+ユーザーから投資仮説を受け取り、以下の手順で自律的に検証してください：
+
+1. **仮説の分解**: 仮説を検証可能な 2〜5 個の観点に分解する
+2. **調査計画**: どのツールをどの順番で使うか計画を立てる
+3. **逐次検証**: ツールを 1 つずつ呼び出し、結果を解釈する
+4. **動的判断**: 途中結果に応じて計画を修正する（想定外のデータが出たら別の角度から調査する）
+5. **結論**: 十分な根拠が集まったら conclude_investigation を呼び出す
+
+重要なルール：
+- 1 ステップにつき 1 ツールを呼び出す（並列呼び出しはしない）
+- 各ステップで「何を調べているか」「何がわかったか」を日本語で簡潔に述べる
+- 仮説に反する証拠も公平に報告する
+- 最大 12 ステップ以内で結論を出す
+- 不確実な場合は "inconclusive" と判定し、追加調査の提案をする
+- 最初に調査計画を述べてから、ツール呼び出しを開始すること
+"""
+
+MAX_AGENT_STEPS = 12
 
 
 # ── Analyst AI class ────────────────────────────────────────────────────
@@ -316,3 +343,172 @@ class AnalystAI:
             "model": model,
         }
         yield {"type": "done", "final_text": final_text}
+
+    def run_agent(self, hypothesis, market="jp"):
+        """Run the hypothesis investigation agent. Generator yielding NDJSON events:
+
+            {'type': 'plan', 'content': str}
+            {'type': 'step', 'step': int, 'tool': str, 'summary': str}
+            {'type': 'step_result', 'step': int, 'tool': str, 'summary': str}
+            {'type': 'conclusion', 'verdict': str, 'summary': str, 'note_id': int}
+            {'type': 'usage', ...}
+            {'type': 'done'}
+            {'type': 'error', 'error': str}
+        """
+        # Rate limit check
+        allowed, reason = rate_limit_service.check_rate_limit(self.user_id)
+        if not allowed:
+            yield {"type": "error", "error": reason}
+            return
+
+        model = DEFAULT_MODEL
+
+        try:
+            client = get_client()
+        except Exception as e:
+            yield {"type": "error", "error": f"LLM client init failed: {e}"}
+            return
+
+        # Build system prompt with agent addon
+        system_prompt = self._system_prompt() + AGENT_SYSTEM_PROMPT_ADDON
+
+        # Initial user message with market context
+        market_label = "日本株（日経225・グロース250）" if market == "jp" else "米国株（S&P 500・NASDAQ 100）"
+        user_message = f"以下の投資仮説を検証してください。\n\n対象市場: {market_label}\n\n仮説: {hypothesis}"
+
+        contents = [
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=user_message)],
+            )
+        ]
+
+        tools = self._build_tools_config(use_pro=False)
+        config = types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            tools=tools,
+            temperature=0.3,
+            max_output_tokens=4000,
+        )
+
+        total_tokens_in = 0
+        total_tokens_out = 0
+        step = 0
+        plan_sent = False
+
+        for round_idx in range(MAX_AGENT_STEPS + 2):
+            # Call Gemini with retry logic
+            import time
+            response = None
+            last_error = None
+            for retry in range(3):
+                try:
+                    response = client.models.generate_content(
+                        model=model, contents=contents, config=config,
+                    )
+                    break
+                except Exception as e:
+                    last_error = e
+                    err_str = str(e)
+                    if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str:
+                        time.sleep(2 ** retry)
+                        continue
+                    break
+
+            if response is None:
+                yield {"type": "error", "error": f"LLM APIエラー: {last_error}"}
+                return
+
+            if response.usage_metadata:
+                total_tokens_in += (response.usage_metadata.prompt_token_count or 0)
+                total_tokens_out += (response.usage_metadata.candidates_token_count or 0)
+
+            if not response.candidates:
+                yield {"type": "error", "error": "empty response"}
+                return
+
+            parts = response.candidates[0].content.parts or []
+            function_calls = []
+            text_parts = []
+
+            for part in parts:
+                if hasattr(part, "function_call") and part.function_call:
+                    function_calls.append(part.function_call)
+                elif hasattr(part, "text") and part.text:
+                    text_parts.append(part.text)
+
+            # Emit plan text (first text response before any tool call)
+            if text_parts:
+                joined = "".join(text_parts)
+                if not plan_sent and not function_calls:
+                    # Text-only response before conclusion — treat as plan or intermediate thought
+                    yield {"type": "plan", "content": joined}
+                    plan_sent = True
+                elif not plan_sent and function_calls:
+                    yield {"type": "plan", "content": joined}
+                    plan_sent = True
+                else:
+                    yield {"type": "text", "content": joined}
+
+            if function_calls:
+                contents.append(response.candidates[0].content)
+                function_response_parts = []
+
+                for fc in function_calls:
+                    fn_name = fc.name
+                    fn_args = dict(fc.args) if fc.args else {}
+                    step += 1
+
+                    # Check for conclusion
+                    if fn_name == "conclude_investigation":
+                        yield {"type": "step", "step": step, "tool": fn_name,
+                               "summary": "検証結果をまとめています...", "status": "concluding"}
+                        result = llm_tools.dispatch_tool(fn_name, fn_args, self.user_id)
+                        yield {
+                            "type": "conclusion",
+                            "verdict": fn_args.get("verdict", "inconclusive"),
+                            "verdict_label": result.get("verdict_label", ""),
+                            "summary": fn_args.get("summary", ""),
+                            "evidence": fn_args.get("evidence", []),
+                            "related_tickers": fn_args.get("related_tickers", []),
+                            "next_steps": fn_args.get("next_steps", ""),
+                            "note_id": result.get("note_id"),
+                            "title": fn_args.get("title", ""),
+                        }
+                        # Record usage and finish
+                        cost = rate_limit_service.calculate_cost(model, total_tokens_in, total_tokens_out)
+                        rate_limit_service.record_usage(self.user_id, model, total_tokens_in, total_tokens_out)
+                        yield {"type": "usage", "tokens_in": total_tokens_in, "tokens_out": total_tokens_out,
+                               "cost_usd": round(cost, 6), "model": model}
+                        yield {"type": "done"}
+                        return
+
+                    # Regular tool call
+                    yield {"type": "step", "step": step, "tool": fn_name,
+                           "summary": f"ステップ {step}: {fn_name} を実行中...", "status": "investigating"}
+                    result = llm_tools.dispatch_tool(fn_name, fn_args, self.user_id)
+                    yield {"type": "step_result", "step": step, "tool": fn_name,
+                           "summary": f"ステップ {step} 完了", "status": "done"}
+
+                    function_response_parts.append(
+                        types.Part.from_function_response(
+                            name=fn_name, response={"result": result},
+                        )
+                    )
+
+                contents.append(types.Content(role="user", parts=function_response_parts))
+
+                if step >= MAX_AGENT_STEPS:
+                    yield {"type": "text", "content": f"（ステップ上限 {MAX_AGENT_STEPS} に到達しました。現時点の調査結果をまとめます。）"}
+                    break
+                continue
+
+            # No function calls — LLM finished without conclude_investigation
+            break
+
+        # Record usage
+        cost = rate_limit_service.calculate_cost(model, total_tokens_in, total_tokens_out)
+        rate_limit_service.record_usage(self.user_id, model, total_tokens_in, total_tokens_out)
+        yield {"type": "usage", "tokens_in": total_tokens_in, "tokens_out": total_tokens_out,
+               "cost_usd": round(cost, 6), "model": model}
+        yield {"type": "done"}
