@@ -1513,6 +1513,17 @@ async function showDetail(stock) {
 
   document.getElementById('modalTitle').textContent = `${stock.ticker} - ${stock.name}`;
 
+  // Show alert editor button for watchlisted stocks
+  _alertEditorTicker = stock.ticker;
+  const alertBtn = document.getElementById('alertEditorBtn');
+  if (alertBtn) {
+    if (watchlistTickers.has(stock.ticker)) {
+      alertBtn.classList.remove('hidden');
+    } else {
+      alertBtn.classList.add('hidden');
+    }
+  }
+
   const fmtPct = (v) => v != null ? (v > 0 ? '+' : '') + v + '%' : '-';
   const fmtVal = (v) => v != null && v !== 0 ? v : '-';
 
@@ -1887,6 +1898,8 @@ function closeModal() {
   document.getElementById('modal').classList.add('hidden');
   document.getElementById('modal').classList.remove('flex');
   if (_chartTimeline) { _chartTimeline.destroy(); _chartTimeline = null; }
+  _alertEditorTicker = null;
+  document.getElementById('alertEditorBtn')?.classList.add('hidden');
 }
 
 // ── Watchlist ──
@@ -2585,6 +2598,136 @@ function renderDailyReport(report, changes) {
 }
 
 
+// ── Smart Watchlist: Alert Editor ─────────────────────────────────────────────
+
+let _alertEditorTicker = null;
+
+const ALERT_FIELDS = [
+  { field: 'momentum_score', label: 'モメンタムスコア' },
+  { field: 'rsi', label: 'RSI' },
+  { field: 'ret_1m', label: '1ヶ月リターン(%)' },
+  { field: 'ret_1w', label: '1週間リターン(%)' },
+  { field: 'ret_3m', label: '3ヶ月リターン(%)' },
+  { field: 'vol_ratio', label: '出来高比' },
+  { field: 'ma50_dev', label: '50日MA乖離(%)' },
+  { field: 'ma200_dev', label: '200日MA乖離(%)' },
+  { field: 'quality_score', label: '品質スコア' },
+  { field: 'adx', label: 'ADX' },
+  { field: 'dist_from_high', label: '52W高値乖離(%)' },
+  { field: 'bb_width', label: 'BB幅(%)' },
+  { field: 'pe_forward', label: 'PER(予想)' },
+  { field: 'pb', label: 'PBR' },
+  { field: 'dividend_yield', label: '配当利回り(%)' },
+];
+
+const ALERT_OPS = [
+  { op: '<', label: '<' },
+  { op: '>', label: '>' },
+  { op: '<=', label: '≤' },
+  { op: '>=', label: '≥' },
+  { op: '==', label: '=' },
+  { op: '!=', label: '≠' },
+];
+
+async function openAlertEditor() {
+  const ticker = _alertEditorTicker;
+  if (!ticker) return;
+
+  // Remove existing editor if open
+  document.getElementById('alertEditorPanel')?.remove();
+
+  const panel = document.createElement('div');
+  panel.id = 'alertEditorPanel';
+  panel.className = 'fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm';
+  panel.onclick = (e) => { if (e.target === panel) panel.remove(); };
+  panel.innerHTML = `
+    <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-700 shadow-xl max-w-md w-full mx-4 p-5" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-slate-900 dark:text-gray-100">⚡ ${ticker} アラート設定</h3>
+        <button onclick="document.getElementById('alertEditorPanel').remove()" class="text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 text-xl cursor-pointer">&times;</button>
+      </div>
+      <div id="alertRulesList" class="space-y-2 mb-4">
+        <div class="text-xs text-slate-400 dark:text-gray-500 text-center py-2">読み込み中...</div>
+      </div>
+      <div class="flex gap-2 items-end mb-4">
+        <select id="alertFieldSelect" class="flex-1 text-xs rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 px-2 py-2">
+          ${ALERT_FIELDS.map(f => `<option value="${f.field}">${f.label}</option>`).join('')}
+        </select>
+        <select id="alertOpSelect" class="w-14 text-xs rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 px-2 py-2">
+          ${ALERT_OPS.map(o => `<option value="${o.op}">${o.label}</option>`).join('')}
+        </select>
+        <input id="alertValueInput" type="number" step="any" placeholder="値" class="w-20 text-xs rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 px-2 py-2">
+        <button onclick="addAlertRule()" class="px-3 py-2 text-xs font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors cursor-pointer">追加</button>
+      </div>
+      <button onclick="saveAlertRules()" class="w-full py-2 text-sm font-medium rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors cursor-pointer">保存</button>
+    </div>
+  `;
+  document.body.appendChild(panel);
+
+  // Load existing rules
+  try {
+    const resp = await fetch(`/api/watchlist/${encodeURIComponent(ticker)}/alerts`);
+    const rules = await resp.json();
+    _renderAlertRules(rules);
+  } catch (e) {
+    _renderAlertRules([]);
+  }
+}
+
+let _pendingAlertRules = [];
+
+function _renderAlertRules(rules) {
+  _pendingAlertRules = [...rules];
+  const container = document.getElementById('alertRulesList');
+  if (!container) return;
+  if (rules.length === 0) {
+    container.innerHTML = '<div class="text-xs text-slate-400 dark:text-gray-500 text-center py-2">ルールなし — 下のフォームから追加してください</div>';
+    return;
+  }
+  const fieldMap = {};
+  ALERT_FIELDS.forEach(f => { fieldMap[f.field] = f.label; });
+  container.innerHTML = rules.map((r, i) => {
+    const opLabel = ALERT_OPS.find(o => o.op === r.op)?.label || r.op;
+    return `<div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-slate-50 dark:bg-gray-800 border border-slate-100 dark:border-gray-700">
+      <span class="text-xs text-slate-700 dark:text-gray-300">${fieldMap[r.field] || r.field} ${opLabel} ${r.value}</span>
+      <button onclick="removeAlertRule(${i})" class="text-rose-400 hover:text-rose-500 text-sm cursor-pointer">&times;</button>
+    </div>`;
+  }).join('');
+}
+
+function addAlertRule() {
+  const field = document.getElementById('alertFieldSelect')?.value;
+  const op = document.getElementById('alertOpSelect')?.value;
+  const value = parseFloat(document.getElementById('alertValueInput')?.value);
+  if (!field || !op || isNaN(value)) return;
+  const fieldLabel = ALERT_FIELDS.find(f => f.field === field)?.label || field;
+  const opLabel = ALERT_OPS.find(o => o.op === op)?.label || op;
+  _pendingAlertRules.push({ field, op, value, label: `${fieldLabel} ${opLabel} ${value}` });
+  _renderAlertRules(_pendingAlertRules);
+  document.getElementById('alertValueInput').value = '';
+}
+
+function removeAlertRule(index) {
+  _pendingAlertRules.splice(index, 1);
+  _renderAlertRules(_pendingAlertRules);
+}
+
+async function saveAlertRules() {
+  const ticker = _alertEditorTicker;
+  if (!ticker) return;
+  try {
+    const resp = await fetch(`/api/watchlist/${encodeURIComponent(ticker)}/alerts`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rules: _pendingAlertRules }),
+    });
+    if (resp.ok) {
+      document.getElementById('alertEditorPanel')?.remove();
+    }
+  } catch (e) { /* silently fail */ }
+}
+
+
 // ── Sprint 6: Notification Drawer ─────────────────────────────────────────────
 
 const EVENT_TYPE_LABELS = {
@@ -2594,6 +2737,7 @@ const EVENT_TYPE_LABELS = {
   score_drop:   { icon: '⬇️', label: 'スコア急落',     cls: 'border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20' },
   earnings_soon:{ icon: '📅', label: '決算接近',       cls: 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20' },
   near_52w_high:{ icon: '🏔️', label: '52W高値接近',   cls: 'border-sky-200 dark:border-sky-800 bg-sky-50/50 dark:bg-sky-950/20' },
+  custom_alert: { icon: '⚡', label: 'カスタムアラート', cls: 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20' },
 };
 
 async function updateNotificationBadge() {
@@ -2638,7 +2782,8 @@ async function showNotificationDrawer() {
       const scorePart = payload.score != null ? ` スコア${payload.score}` : '';
       const deltaPart = payload.score_delta != null ? ` (${payload.score_delta > 0 ? '+' : ''}${payload.score_delta})` : '';
       const rankPart  = payload.rank ? ` #${payload.rank}` : (payload.prev_rank ? ` 前回#${payload.prev_rank}` : '');
-      const detail    = `${rankPart}${scorePart}${deltaPart}`;
+      const rulePart  = payload.rule ? ` ${payload.rule} (実値: ${payload.actual})` : '';
+      const detail    = ev.event_type === 'custom_alert' ? rulePart : `${rankPart}${scorePart}${deltaPart}`;
       return `
         <div class="flex items-start gap-3 p-3 rounded-xl border ${meta.cls} ${unreadCls}">
           <span class="text-lg leading-none mt-0.5">${meta.icon}</span>
