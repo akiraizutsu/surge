@@ -406,9 +406,17 @@ class AnalystAI:
         step = 0
         plan_sent = False
 
+        import time
+        # Free tier: 5 req/min → need ~13s between calls to stay under limit.
+        # Paid tier has higher limits so this spacing becomes unnecessary overhead
+        # but is safe either way.
+        _STEP_COOLDOWN = int(os.environ.get("AGENT_STEP_COOLDOWN", "13"))
+
         for round_idx in range(MAX_AGENT_STEPS + 2):
-            # Call Gemini with retry logic
-            import time
+            # Rate-limit spacing: wait between Gemini calls to avoid 429
+            if round_idx > 0 and _STEP_COOLDOWN > 0:
+                time.sleep(_STEP_COOLDOWN)
+
             response = None
             last_error = None
             for retry in range(3):
@@ -423,7 +431,8 @@ class AnalystAI:
                     is_quota = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
                     is_transient = "503" in err_str or "UNAVAILABLE" in err_str
                     if is_quota or is_transient:
-                        wait = (8 * (retry + 1)) if is_quota else (2 ** retry)
+                        # Wait longer: 15/30/45s for quota, 2/4/8s for transient
+                        wait = (15 * (retry + 1)) if is_quota else (2 ** (retry + 1))
                         time.sleep(wait)
                         continue
                     break
@@ -431,7 +440,7 @@ class AnalystAI:
             if response is None:
                 err_str = str(last_error) if last_error else ""
                 if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                    friendly = "AIが混雑しています。30秒ほど待ってから再度お試しください。"
+                    friendly = "AIが混雑しています。1分ほど待ってから再度お試しください。"
                 else:
                     friendly = "AIへの接続に失敗しました。しばらくしてから再度お試しください。"
                 yield {"type": "error", "error": friendly}
