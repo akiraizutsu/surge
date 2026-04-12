@@ -1716,15 +1716,9 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
             merged["short_pct_of_float"] = item.get("short_interest", {}).get("short_pct_of_float")
             merged["short_change_pct"] = item.get("short_interest", {}).get("short_change_pct")
             # Phase 1: Real options data from option_chain
+            # Disabled during bulk screening to avoid 30s+ overhead (50 tickers × 0.6s each).
+            # Options data is fetched on-demand via the live API endpoint instead.
             options_metrics = None
-            try:
-                import options_service
-                hist_vol = (tech.get("bb_width") or 0) / 100  # bb_width is %, convert to decimal
-                options_metrics = options_service.compute_options_metrics(
-                    ticker, item.get("price", 0), hist_vol=hist_vol if hist_vol > 0 else None
-                )
-            except Exception:
-                pass
             us_adv = us_advanced_service.compute_us_advanced(merged, options_metrics=options_metrics)
             item["us_advanced_score"] = us_adv["us_advanced_score"]
             item["us_advanced_tags"]  = us_adv["us_advanced_tags"]
