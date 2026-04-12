@@ -262,17 +262,26 @@ class AnalystAI:
                         )
                         is_quota = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
                         if is_transient or is_quota:
-                            # Exponential backoff: 1s, 2s, 4s, 8s
-                            time.sleep(2 ** retry)
+                            # Longer backoff for 429 (API says ~30s), shorter for 503
+                            wait = (8 * (retry + 1)) if is_quota else (2 ** retry)
+                            time.sleep(wait)
                             continue
                         break
                 if response is not None:
                     break
 
             if response is None:
+                # User-friendly message without leaking raw API details
+                err_str = str(last_error) if last_error else ""
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    friendly = "AIが混雑しています。30秒ほど待ってから再度お試しください。"
+                elif "503" in err_str or "UNAVAILABLE" in err_str:
+                    friendly = "AIサーバーが一時的に利用できません。少し時間をおいてから再度お試しください。"
+                else:
+                    friendly = "AIへの接続に失敗しました。しばらくしてから再度お試しください。"
                 yield {
                     "type": "error",
-                    "error": f"LLM APIが応答しません（混雑中）。数分後に再試行してください。\n詳細: {last_error}",
+                    "error": friendly,
                 }
                 return
 
@@ -410,13 +419,21 @@ class AnalystAI:
                 except Exception as e:
                     last_error = e
                     err_str = str(e)
-                    if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str:
-                        time.sleep(2 ** retry)
+                    is_quota = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
+                    is_transient = "503" in err_str or "UNAVAILABLE" in err_str
+                    if is_quota or is_transient:
+                        wait = (8 * (retry + 1)) if is_quota else (2 ** retry)
+                        time.sleep(wait)
                         continue
                     break
 
             if response is None:
-                yield {"type": "error", "error": f"LLM APIエラー: {last_error}"}
+                err_str = str(last_error) if last_error else ""
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    friendly = "AIが混雑しています。30秒ほど待ってから再度お試しください。"
+                else:
+                    friendly = "AIへの接続に失敗しました。しばらくしてから再度お試しください。"
+                yield {"type": "error", "error": friendly}
                 return
 
             if response.usage_metadata:
