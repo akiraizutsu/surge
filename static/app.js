@@ -3772,6 +3772,8 @@ async function sendAgentMessage() {
   container.scrollTop = container.scrollHeight;
 
   const stepsEl = agentEl.querySelector('#agentSteps');
+  let agentGotConclusion = false;
+  let agentAllText = '';
 
   try {
     const resp = await fetch('/api/agent', {
@@ -3812,8 +3814,10 @@ async function sendAgentMessage() {
               stepEl.classList.remove('text-slate-500');
             }
           } else if (chunk.type === 'text') {
+            agentAllText += chunk.content;
             stepsEl.innerHTML += '<div class="text-xs text-slate-600 dark:text-gray-300">' + renderChatMarkdown(chunk.content) + '</div>';
           } else if (chunk.type === 'conclusion') {
+            agentGotConclusion = true;
             const verdictColors = {
               supported: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
               partially_supported: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
@@ -3849,6 +3853,17 @@ async function sendAgentMessage() {
     chatIsStreaming = false;
     document.getElementById('chatSendBtn').disabled = false;
     await loadChatUsage();
+
+    // If agent finished without conclude_investigation, show manual save button
+    if (!agentGotConclusion && agentAllText.length > 50) {
+      lastAssistantAnswer = agentAllText;
+      lastAssistantQuestion = hypothesis;
+      lastAssistantToolCalls = [];
+      const saveDiv = document.createElement('div');
+      saveDiv.className = 'mt-2 flex justify-end';
+      saveDiv.innerHTML = '<button onclick="showNoteSaveDialog()" class="text-[10px] px-3 py-1.5 rounded-lg bg-primary-500 text-white hover:bg-primary-600 cursor-pointer transition-colors">📌 調査結果をノートに保存</button>';
+      agentEl.appendChild(saveDiv);
+    }
   }
 }
 

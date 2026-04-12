@@ -133,7 +133,7 @@ AGENT_SYSTEM_PROMPT_ADDON = """
 2. **調査計画**: どのツールをどの順番で使うか計画を立てる
 3. **逐次検証**: ツールを 1 つずつ呼び出し、結果を解釈する
 4. **動的判断**: 途中結果に応じて計画を修正する（想定外のデータが出たら別の角度から調査する）
-5. **結論**: 十分な根拠が集まったら conclude_investigation を呼び出す
+5. **結論**: 十分な根拠が集まったら **必ず conclude_investigation ツールを呼び出して** 結論を出す
 
 重要なルール：
 - 1 ステップにつき 1 ツールを呼び出す（並列呼び出しはしない）
@@ -143,6 +143,7 @@ AGENT_SYSTEM_PROMPT_ADDON = """
 - 不確実な場合は "inconclusive" と判定し、追加調査の提案をする
 - 最初に調査計画を述べてから、ツール呼び出しを開始すること
 - **conclude_investigation の summary, evidence, next_steps に内部ツール名（get_ranking, get_stock_detail 等）を絶対に書かない。「ランキングデータ」「銘柄詳細」のように自然な日本語で表現すること**
+- **最も重要: 結論をテキストで書くのではなく、必ず conclude_investigation ツールを呼び出すこと。テキストで結論を書いて終わるのは禁止。conclude_investigation を呼ぶことで調査ノートに自動保存される。**
 """
 
 MAX_AGENT_STEPS = 12
