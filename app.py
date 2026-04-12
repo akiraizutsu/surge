@@ -19,7 +19,7 @@ if os.path.exists(_dotenv):
 import requests
 import yfinance as yf
 
-from screener import run_screening
+from screener import run_screening, generate_morning_brief
 import database
 from database import (
     init_db, save_session, save_results, save_value_gap_results,
@@ -364,6 +364,23 @@ def _run_single_index(index, top_n):
     if result.get("breadth"):
         save_breadth(index, result["breadth"])
 
+    _save_brief_for_result(session_id, result, index)
+
+
+def _save_brief_for_result(session_id, result, index):
+    """Helper to generate and save morning brief after screening."""
+    try:
+        brief = generate_morning_brief(
+            daily_report=result.get("daily_report", {}),
+            changes=result.get("changes", {}),
+            regime=result.get("regime"),
+            index_label=result.get("index", index),
+            generated_at=result.get("generated_at", ""),
+        )
+        database.save_brief(session_id, brief)
+    except Exception:
+        pass
+
 
 def _run_all_indices(top_n):
     span_per = 100 // len(ALL_INDICES)
@@ -374,7 +391,6 @@ def _run_all_indices(top_n):
         result = run_screening(index=idx, top_n=top_n, progress_cb=cb)
         with _lock:
             _state["results"][idx] = result
-            # Keep the latest as the single result for backward compat
             _state["result"] = result
 
         regime_json = json.dumps(result["regime"], ensure_ascii=False) if result.get("regime") else None
@@ -389,9 +405,10 @@ def _run_all_indices(top_n):
         if result.get("value_gap_ranking"):
             save_value_gap_results(session_id, result["value_gap_ranking"])
 
-        # Save market breadth history
         if result.get("breadth"):
             save_breadth(idx, result["breadth"])
+
+        _save_brief_for_result(session_id, result, idx)
 
 
 def _run_japan_indices(top_n):
@@ -421,6 +438,8 @@ def _run_japan_indices(top_n):
         if result.get("breadth"):
             save_breadth(idx, result["breadth"])
 
+        _save_brief_for_result(session_id, result, idx)
+
 
 def _run_us_indices(top_n):
     """Run screening for S&P 500 and NASDAQ 100 only."""
@@ -448,6 +467,20 @@ def _run_us_indices(top_n):
             save_value_gap_results(session_id, result["value_gap_ranking"])
         if result.get("breadth"):
             save_breadth(idx, result["breadth"])
+
+        _save_brief_for_result(session_id, result, idx)
+
+
+@app.get("/api/briefs/latest")
+def api_briefs_latest():
+    """Return the latest morning briefs for a page (japan or us)."""
+    page = request.args.get("page", "us")
+    if page == "japan":
+        index_names = ["nikkei225", "growth250"]
+    else:
+        index_names = ["sp500", "nasdaq100"]
+    briefs = database.get_latest_briefs(index_names, limit=2)
+    return jsonify(briefs)
 
 
 @app.route("/")

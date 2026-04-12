@@ -275,6 +275,9 @@ def init_db():
         # ADX (trend strength)
         _add_column_if_missing(conn, "screening_results", "adx", "REAL")
 
+        # Morning Brief: daily brief stored per screening session
+        _add_column_if_missing(conn, "screening_sessions", "brief_json", "TEXT")
+
         # Smart Watchlist: custom alert rules per watchlist entry
         _add_column_if_missing(conn, "watchlist", "alert_rules_json", "TEXT")
 
@@ -364,6 +367,43 @@ def save_session(meta):
         session_id = cur.lastrowid
     conn.close()
     return session_id
+
+
+def save_brief(session_id, brief_dict):
+    """Save morning brief JSON to a screening session."""
+    import json as _json
+    conn = _connect()
+    with conn:
+        conn.execute(
+            "UPDATE screening_sessions SET brief_json = ? WHERE id = ?",
+            (_json.dumps(brief_dict, ensure_ascii=False), session_id),
+        )
+    conn.close()
+
+
+def get_latest_briefs(index_names, limit=2):
+    """Return the latest brief for each index_name that has one."""
+    import json as _json
+    conn = _connect()
+    result = []
+    for idx in index_names:
+        row = conn.execute(
+            """SELECT brief_json, generated_at, index_name
+               FROM screening_sessions
+               WHERE index_name = ? AND brief_json IS NOT NULL
+               ORDER BY id DESC LIMIT 1""",
+            (idx,),
+        ).fetchone()
+        if row and row["brief_json"]:
+            try:
+                brief = _json.loads(row["brief_json"])
+                brief["generated_at"] = row["generated_at"]
+                brief["index_name"] = row["index_name"]
+                result.append(brief)
+            except Exception:
+                continue
+    conn.close()
+    return result[:limit]
 
 
 def save_results(session_id, ranking):

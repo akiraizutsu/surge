@@ -3299,11 +3299,65 @@ async function submitChangePassword() {
 
 // ── Chat Drawer ──────────────────────────────────────────────────────
 
+let _briefLoaded = false;
+
+async function loadMorningBrief() {
+  if (_briefLoaded) return;
+  _briefLoaded = true;
+  const page = window.IS_JAPAN_PAGE ? 'japan' : 'us';
+  try {
+    const resp = await fetch(`/api/briefs/latest?page=${page}`);
+    if (!resp.ok) return;
+    const briefs = await resp.json();
+    if (!Array.isArray(briefs) || briefs.length === 0) return;
+
+    const container = document.getElementById('chatMessages');
+    if (!container) return;
+
+    const cards = briefs.map(b => {
+      const candBadges = (b.candidates || []).map(c => {
+        const cls = c.type === 'initial'
+          ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400'
+          : 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400';
+        return `<span class="inline-block px-2 py-0.5 text-[10px] rounded-full font-medium ${cls}">${c.ticker} <span class="opacity-70">${c.reason}</span></span>`;
+      }).join(' ');
+
+      const cautionBadges = (b.cautions || []).map(c =>
+        `<span class="inline-block px-2 py-0.5 text-[10px] rounded-full font-medium bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400">${c.ticker} <span class="opacity-70">${c.reason}</span></span>`
+      ).join(' ');
+
+      const summaryHtml = (b.summary_lines || []).map(l =>
+        `<div class="text-xs text-slate-600 dark:text-gray-300">• ${l}</div>`
+      ).join('');
+
+      const alertHtml = (b.watchlist_alerts || []).slice(0, 3).map(a =>
+        `<div class="text-[10px] text-amber-600 dark:text-amber-400">⚡ ${a}</div>`
+      ).join('');
+
+      return `
+        <div class="mb-3 rounded-xl border border-primary-200 dark:border-primary-800 bg-gradient-to-br from-primary-50 to-white dark:from-primary-950/30 dark:to-gray-900 p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-lg">📋</span>
+            <span class="text-sm font-bold text-slate-900 dark:text-gray-100">${b.index_label || ''} モーニングブリーフ</span>
+            <span class="text-[10px] text-slate-400 dark:text-gray-500 ml-auto">${b.generated_at || ''}</span>
+          </div>
+          <div class="inline-block px-2 py-0.5 text-[10px] rounded-full font-medium bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-400 mb-2">${b.regime_label || ''}</div>
+          ${summaryHtml ? `<div class="space-y-1 mb-2">${summaryHtml}</div>` : ''}
+          ${candBadges ? `<div class="mb-2"><div class="text-[10px] text-slate-400 dark:text-gray-500 mb-1">注目銘柄</div><div class="flex flex-wrap gap-1">${candBadges}</div></div>` : ''}
+          ${cautionBadges ? `<div class="mb-2"><div class="text-[10px] text-slate-400 dark:text-gray-500 mb-1">過熱注意</div><div class="flex flex-wrap gap-1">${cautionBadges}</div></div>` : ''}
+          ${alertHtml ? `<div class="mt-2 space-y-0.5">${alertHtml}</div>` : ''}
+        </div>`;
+    }).join('');
+
+    container.insertAdjacentHTML('afterbegin', cards);
+  } catch (e) { /* silently fail */ }
+}
+
 async function openChatDrawer() {
   document.getElementById('chatDrawer').classList.remove('hidden');
-  // Hide FAB while open (avoid visual duplication since there's an X button)
   document.getElementById('chatFab')?.classList.add('hidden');
   await loadChatUsage();
+  loadMorningBrief();
   setTimeout(() => document.getElementById('chatInput')?.focus(), 100);
 }
 
@@ -3332,6 +3386,8 @@ async function loadChatUsage() {
 function clearChatHistory() {
   chatHistory = [];
   document.getElementById('chatMessages').innerHTML = '';
+  _briefLoaded = false;
+  loadMorningBrief();
 }
 
 function updateChatModelBadge() {
