@@ -91,10 +91,14 @@
         <a href="#correlation" class="toc-link block py-1 pl-3">└ セクター相関</a>
         <a href="#regime"      class="toc-link block py-1">市場レジーム</a>
         <a href="#report"      class="toc-link block py-1">日次レポート</a>
+        <a href="#brief"       class="toc-link block py-1">📋 モーニングブリーフ</a>
         <a href="#notify"      class="toc-link block py-1">変化通知</a>
         <a href="#detail"      class="toc-link block py-1">銘柄詳細モーダル</a>
+        <a href="#timeline"    class="toc-link block py-1 pl-3">└ タイムライン</a>
+        <a href="#options"     class="toc-link block py-1 pl-3">└ オプション動向</a>
         <a href="#cf"          class="toc-link block py-1">CF分析（日本株）</a>
         <a href="#backtest"    class="toc-link block py-1">バックテスト</a>
+        <a href="#smartwl"     class="toc-link block py-1">⚡ スマートウォッチリスト</a>
         <a href="#watchlist"   class="toc-link block py-1">ウォッチリスト</a>
         <a href="#history"     class="toc-link block py-1">履歴</a>
         <a href="#compare"     class="toc-link block py-1">銘柄比較</a>
@@ -522,7 +526,7 @@
                 <tr><td class="py-2">EPS改定</td><td class="py-2">予想EPS vs 実績EPS → 上方/下方/横ばい</td><td class="py-2 text-right font-mono">30%</td></tr>
                 <tr><td class="py-2">機関投資家フロー</td><td class="py-2">機関保有比率の変化 → 買い増し/売り減らし</td><td class="py-2 text-right font-mono">30%</td></tr>
                 <tr><td class="py-2">決算後ドリフト</td><td class="py-2">決算後の価格継続性 → 上昇継続/下落継続</td><td class="py-2 text-right font-mono">25%</td></tr>
-                <tr><td class="py-2">オプションシグナル</td><td class="py-2">空売り比率をプロキシとした需給判断</td><td class="py-2 text-right font-mono">15%</td></tr>
+                <tr><td class="py-2">オプション動向</td><td class="py-2">yfinance option_chain()から GEX・PCR・IV Rank・MaxPain を算出</td><td class="py-2 text-right font-mono">15%</td></tr>
               </tbody>
             </table>
           </div>
@@ -566,6 +570,27 @@
         </div>
       </section>
 
+      <!-- Morning Brief -->
+      <section id="brief" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">📋 モーニングブリーフ</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 space-y-3">
+          <p class="text-sm text-slate-600 dark:text-gray-300">スクリーニング完了時に自動生成される市場サマリーカード。チャットドロワー（🤖ボタン）を開くと先頭に表示される。</p>
+          <div class="grid sm:grid-cols-2 gap-3 text-sm text-slate-600 dark:text-gray-300">
+            <ul class="space-y-1">
+              <li>• <strong>地合いバッジ:</strong> 現在の市場レジーム（強気/弱気/中立/分散）</li>
+              <li>• <strong>サマリー行:</strong> 騰落比率・資金流入セクター・新規ランクインなどのハイライト</li>
+              <li>• <strong>注目銘柄バッジ:</strong> 初動候補（紫）/ 継続強者（水色）を色分け表示</li>
+            </ul>
+            <ul class="space-y-1">
+              <li>• <strong>過熱注意バッジ:</strong> RSI高水準・過熱シグナル点灯銘柄をローズ色で警告</li>
+              <li>• <strong>WLアラート:</strong> ウォッチリスト銘柄のスコア急変・カスタムアラート発火を表示</li>
+              <li>• <strong>コスト:</strong> Gemini 不使用のテンプレート整形 → API コスト 0 円</li>
+            </ul>
+          </div>
+          <p class="text-xs text-slate-400 dark:text-gray-500">日本株ページでは日経225+グロース250、米国株ページではS&P500+NASDAQ100のブリーフが表示される。「クリア」ボタンで再表示。</p>
+        </div>
+      </section>
+
       <!-- Notifications -->
       <section id="notify" class="section-anchor">
         <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">変化通知（🔔）</h2>
@@ -576,6 +601,7 @@
             <li>• <strong>圏外落下:</strong> 前回上位だった銘柄がランク外に落ちた</li>
             <li>• <strong>スコア急上昇:</strong> 前回比 +8点以上のスコア上昇</li>
             <li>• <strong>スコア急落:</strong> 前回比 −8点以上のスコア低下</li>
+            <li>• <strong>カスタムアラート:</strong> スマートウォッチリストの条件一致で⚡通知</li>
             <li>• <strong>ウォッチリスト連動:</strong> ウォッチリスト登録銘柄の変化を優先通知</li>
           </ul>
         </div>
@@ -600,9 +626,57 @@
               <li>• <strong>ドローダウン</strong>（3M最大DD・現在DD）</li>
               <li>• ファンダメンタルズ（PER・PBR・EPS・配当利回り）</li>
               <li>• ショートスクイーズ分析（米国株のみ）</li>
+              <li>• <strong>オプション動向</strong>（GEX・PCR・IV・MaxPain — 米国株のみ）</li>
+              <li>• <strong>モメンタムタイムライン</strong>（過去スコア+RSI推移チャート）</li>
               <li>• スコア内訳グラフ（各指標の貢献度）</li>
             </ul>
           </div>
+        </div>
+      </section>
+
+      <!-- Timeline -->
+      <section id="timeline" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">📈 モメンタムタイムライン</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
+          <p class="text-sm text-slate-600 dark:text-gray-300 mb-3">銘柄詳細モーダルの下部に表示される折れ線チャート。過去のスクリーニングセッションにおけるスコアとRSIの推移を確認できる。</p>
+          <ul class="text-sm text-slate-600 dark:text-gray-300 space-y-1">
+            <li>• <strong>左軸（紫）:</strong> モメンタムスコアの推移</li>
+            <li>• <strong>右軸（オレンジ破線）:</strong> RSIの推移</li>
+            <li>• 最大30セッション分の履歴を時系列で表示</li>
+            <li>• スクリーニングが2回以上ある銘柄のみ表示（1回の場合は「データなし」表示）</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Options Analysis -->
+      <section id="options" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">オプション動向（米国株専用）</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 space-y-3">
+          <p class="text-sm text-slate-600 dark:text-gray-300">銘柄詳細モーダル内に表示。yfinance の option_chain() から直近満期のオプションデータを取得し、7つの指標を算出する。</p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="text-xs text-slate-400 dark:text-gray-500">
+                <tr>
+                  <th class="text-left pb-2">指標</th>
+                  <th class="text-left pb-2">意味</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 dark:divide-gray-800 text-slate-600 dark:text-gray-300">
+                <tr><td class="py-2 font-semibold">GEXスコア</td><td class="py-2">ディーラーのガンマエクスポージャー (-100〜+100)。ネガティブGEX = 価格変動増幅 = ガンマスクイーズリスク</td></tr>
+                <tr><td class="py-2 font-semibold">PCR (出来高/建玉)</td><td class="py-2">プット/コール比率。1.0未満 = コール優勢（強気）、1.3超 = プット優勢（弱気）</td></tr>
+                <tr><td class="py-2 font-semibold">IV Rank</td><td class="py-2">現在のインプライドボラティリティの相対水準 (0-100)。80超で「IV高水準」タグ</td></tr>
+                <tr><td class="py-2 font-semibold">ATM IV</td><td class="py-2">アット・ザ・マネー付近のインプライドボラティリティ (%)</td></tr>
+                <tr><td class="py-2 font-semibold">IVスキュー</td><td class="py-2">OTMプットIV - OTMコールIV。プラス = ヘッジ需要高（フロアプロテクション）</td></tr>
+                <tr><td class="py-2 font-semibold">Max Pain</td><td class="py-2">オプションホルダーの損失が最大になるストライク。SQ前の株価収束先の目安</td></tr>
+                <tr><td class="py-2 font-semibold">異常コール出来高</td><td class="py-2">コール出来高/プット出来高 &gt; 3 またはコール出来高/OI &gt; 0.5 で検出</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="mt-3 p-3 bg-rose-50 dark:bg-rose-950/20 rounded-lg border border-rose-100 dark:border-rose-900/30">
+            <p class="text-sm font-semibold text-rose-600 dark:text-rose-400 mb-1">🔥 ガンマスクイーズリスク</p>
+            <p class="text-xs text-slate-500 dark:text-gray-400">GEXスコアが -30以下かつ PCR < 0.8（コール優勢）の場合に警戒フラグが点灯。ディーラーがネガティブガンマの状態でコール出来高が集中すると、ディーラーのデルタヘッジ（株買い）が株価上昇をさらに加速させるメカニズム。</p>
+          </div>
+          <p class="text-xs text-slate-400 dark:text-gray-500 mt-2">ライブAPI（銘柄詳細モーダル）では直近2満期分のデータを使用。US Advanced テーブルの「オプション」列にGEXスコアが表示される。</p>
         </div>
       </section>
 
@@ -642,6 +716,32 @@
             <li>• ベンチマーク（SPY / ^N225）との比較エクイティカーブを表示</li>
             <li>• 結果はDBに保存され、再実行なしで確認可能</li>
           </ul>
+        </div>
+      </section>
+
+      <!-- Smart Watchlist -->
+      <section id="smartwl" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b border-slate-200 dark:border-gray-800">⚡ スマートウォッチリスト</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 space-y-3">
+          <p class="text-sm text-slate-600 dark:text-gray-300">ウォッチリスト銘柄にカスタム条件を設定し、スクリーニング実行時に自動チェック → 条件一致で⚡カスタムアラート通知を生成する。</p>
+          <div class="grid sm:grid-cols-2 gap-4 text-sm text-slate-600 dark:text-gray-300">
+            <div>
+              <p class="font-semibold text-slate-700 dark:text-gray-200 mb-2">設定方法</p>
+              <ol class="list-decimal list-inside space-y-1">
+                <li>ウォッチリストに銘柄を追加</li>
+                <li>銘柄詳細モーダルのタイトル横にある ⚡ ボタンをクリック</li>
+                <li>指標（RSI, スコア, 1Mリターン等）× 演算子 × 値を設定</li>
+                <li>「追加」→「保存」でルールが登録される</li>
+              </ol>
+            </div>
+            <div>
+              <p class="font-semibold text-slate-700 dark:text-gray-200 mb-2">利用可能な指標</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">モメンタムスコア / RSI / 1M・1W・3Mリターン / 出来高比 / MA乖離 / 品質スコア / ADX / 52W乖離 / BB幅 / PER / PBR / 配当利回り</p>
+              <p class="font-semibold text-slate-700 dark:text-gray-200 mt-3 mb-1">演算子</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">&lt; / &gt; / ≤ / ≥ / = / ≠</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-400 dark:text-gray-500">トリガーされたアラートは🔔通知ドロワーに「⚡ カスタムアラート」として表示される。ルールは複数設定可能（OR条件で各ルールが独立して発火）。</p>
         </div>
       </section>
 
