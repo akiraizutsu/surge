@@ -1403,6 +1403,52 @@ def generate_daily_report(ranking: list, regime: dict, breadth: dict, sector_rot
     }
 
 
+def generate_morning_brief(daily_report, changes, regime, index_label, generated_at):
+    """Build a morning brief dict from existing daily_report + changes data.
+
+    Pure template logic — no LLM call, zero cost.
+    Returns:
+        {
+          "index_label": str,
+          "generated_at": str,
+          "regime_label": str,
+          "summary_lines": [str],
+          "candidates": [{ticker, name, score, reason, type: "initial"|"streak"}],
+          "cautions": [{ticker, name, score, reason}],
+          "watchlist_alerts": [str],
+        }
+    """
+    regime_label = (regime or {}).get("label", "不明")
+
+    # Summary lines from daily_report highlights
+    summary_lines = list(daily_report.get("highlights", []))
+    if not summary_lines:
+        summary_lines.append(f"地合い: {regime_label}")
+
+    # Merge initial + streak candidates
+    candidates = []
+    for c in daily_report.get("initial_candidates", []):
+        candidates.append({**c, "type": "initial"})
+    for c in daily_report.get("streak_candidates", []):
+        candidates.append({**c, "type": "streak"})
+
+    # Cautions
+    cautions = daily_report.get("caution_candidates", [])
+
+    # Watchlist alerts
+    wl_alerts = daily_report.get("watchlist_alerts", [])
+
+    return {
+        "index_label": index_label,
+        "generated_at": generated_at,
+        "regime_label": regime_label,
+        "summary_lines": summary_lines[:5],
+        "candidates": candidates[:6],
+        "cautions": cautions[:3],
+        "watchlist_alerts": wl_alerts[:5],
+    }
+
+
 def run_screening(index="sp500", top_n=20, progress_cb=None):
     """Run full screening pipeline. Returns dict with results."""
     if progress_cb:
