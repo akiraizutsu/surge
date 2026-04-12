@@ -245,6 +245,8 @@ def init_db():
                 ON research_notes(user_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_notes_pinned
                 ON research_notes(user_id, is_pinned DESC, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_screening_results_ticker
+                ON screening_results(ticker, session_id DESC);
         """)
 
         # ── Schema migrations: add columns to existing tables ──────────────
@@ -481,6 +483,24 @@ def get_stock_explain(ticker):
         "tags": [dict(t) for t in tags],
         "questions": [q["question_text"] for q in questions],
     }
+
+
+def get_ticker_timeline(ticker, limit=30):
+    """Return historical momentum_score, rsi, ret_1m, rank for a ticker across sessions."""
+    conn = _connect()
+    rows = conn.execute(
+        """SELECT r.momentum_score, r.rsi, r.ret_1m, r.rank,
+                  s.generated_at, s.index_name
+           FROM screening_results r
+           JOIN screening_sessions s ON r.session_id = s.id
+           WHERE r.ticker = ?
+           ORDER BY s.id DESC
+           LIMIT ?""",
+        (ticker.upper(), limit),
+    ).fetchall()
+    conn.close()
+    # Reverse to chronological order (oldest first)
+    return [dict(r) for r in reversed(rows)]
 
 
 def get_sessions(limit=20):

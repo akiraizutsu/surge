@@ -617,6 +617,15 @@ def stock_explain(ticker):
     return jsonify({"error": f"{ticker} not found in recent screening results"}), 404
 
 
+@app.get("/api/stock/<ticker>/timeline")
+def api_stock_timeline(ticker):
+    """Return momentum score timeline for a ticker across screening sessions."""
+    ticker = ticker.upper()
+    limit = request.args.get("limit", 30, type=int)
+    data = database.get_ticker_timeline(ticker, limit=limit)
+    return jsonify(data)
+
+
 # ── Watchlist (per-user) ──
 
 @app.get("/api/watchlist")

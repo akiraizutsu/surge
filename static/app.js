@@ -1130,6 +1130,7 @@ function renderRotationTable(rotation) {
 }
 
 let _chartSectorETF = null;
+let _chartTimeline = null;
 function renderSectorETFCompare(rotation) {
   const canvas = document.getElementById('chartSectorETF');
   if (!canvas || !rotation || rotation.length === 0) return;
@@ -1747,10 +1748,20 @@ async function showDetail(stock) {
         </div>
       `).join('')}
     </div>
+
+    <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 mt-6 tracking-wider">📈 モメンタムタイムライン</h3>
+    <div id="timelineSection" class="mb-6 bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-4">
+      <div id="timelineLoading" class="text-[11px] text-slate-400 dark:text-gray-500 py-4 text-center">タイムラインを読み込み中...</div>
+      <canvas id="chartTimeline" class="hidden" height="180"></canvas>
+      <div id="timelineEmpty" class="hidden text-[11px] text-slate-400 dark:text-gray-500 py-4 text-center">タイムラインデータがありません</div>
+    </div>
   `;
 
   document.getElementById('modal').classList.remove('hidden');
   document.getElementById('modal').classList.add('flex');
+
+  // ── Load timeline chart ────────────────────────────────────────────────────
+  loadTimeline(stock.ticker);
 
   // ── Load score breakdown / tags / questions ───────────────────────────────
   // Use embedded data if available (fresh screening), otherwise fetch from API
@@ -1781,9 +1792,101 @@ async function showDetail(stock) {
   }
 }
 
+async function loadTimeline(ticker) {
+  const loadingEl = document.getElementById('timelineLoading');
+  const canvasEl = document.getElementById('chartTimeline');
+  const emptyEl = document.getElementById('timelineEmpty');
+  if (!canvasEl) return;
+
+  try {
+    const resp = await fetch(`/api/stock/${encodeURIComponent(ticker)}/timeline`);
+    if (!resp.ok) throw new Error('fetch failed');
+    const data = await resp.json();
+    if (loadingEl) loadingEl.classList.add('hidden');
+
+    if (!Array.isArray(data) || data.length < 2) {
+      if (emptyEl) emptyEl.classList.remove('hidden');
+      return;
+    }
+
+    canvasEl.classList.remove('hidden');
+    const isDark = document.documentElement.classList.contains('dark');
+    const textColor = isDark ? '#9ca3af' : '#6b7280';
+    const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+    const labels = data.map(d => d.generated_at || '');
+    const scores = data.map(d => d.momentum_score);
+    const rsis = data.map(d => d.rsi);
+
+    if (_chartTimeline) { _chartTimeline.destroy(); _chartTimeline = null; }
+    _chartTimeline = new Chart(canvasEl.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'モメンタムスコア',
+            data: scores,
+            borderColor: isDark ? '#818cf8' : '#6366f1',
+            backgroundColor: isDark ? 'rgba(129,140,248,0.1)' : 'rgba(99,102,241,0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            yAxisID: 'y',
+          },
+          {
+            label: 'RSI',
+            data: rsis,
+            borderColor: isDark ? '#f97316' : '#ea580c',
+            borderDash: [4, 3],
+            fill: false,
+            tension: 0.3,
+            pointRadius: 2,
+            pointHoverRadius: 4,
+            yAxisID: 'y1',
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            labels: { color: textColor, font: { size: 10 }, boxWidth: 14 },
+          },
+        },
+        scales: {
+          x: {
+            ticks: { color: textColor, font: { size: 9 }, maxRotation: 45, maxTicksLimit: 8 },
+            grid: { color: gridColor },
+          },
+          y: {
+            position: 'left',
+            title: { display: true, text: 'スコア', color: textColor, font: { size: 10 } },
+            ticks: { color: textColor, font: { size: 10 } },
+            grid: { color: gridColor },
+          },
+          y1: {
+            position: 'right',
+            title: { display: true, text: 'RSI', color: textColor, font: { size: 10 } },
+            ticks: { color: textColor, font: { size: 10 } },
+            grid: { drawOnChartArea: false },
+            min: 0,
+            max: 100,
+          },
+        },
+      },
+    });
+  } catch (e) {
+    if (loadingEl) loadingEl.classList.add('hidden');
+    if (emptyEl) emptyEl.classList.remove('hidden');
+  }
+}
+
 function closeModal() {
   document.getElementById('modal').classList.add('hidden');
   document.getElementById('modal').classList.remove('flex');
+  if (_chartTimeline) { _chartTimeline.destroy(); _chartTimeline = null; }
 }
 
 // ── Watchlist ──
