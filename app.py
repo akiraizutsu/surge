@@ -649,6 +649,48 @@ def api_remove_watchlist(ticker):
     return jsonify({"status": "removed", "ticker": ticker.upper()})
 
 
+# ── Smart Watchlist: Alert Rules ──
+
+@app.get("/api/watchlist/<ticker>/alerts")
+def api_get_alert_rules(ticker):
+    rules = database.get_alert_rules(ticker.upper(), user_id=current_user_id())
+    return jsonify(rules)
+
+
+@app.patch("/api/watchlist/<ticker>/alerts")
+def api_update_alert_rules(ticker):
+    data = request.get_json(silent=True) or {}
+    rules = data.get("rules", [])
+    VALID_OPS = {"<", ">", "<=", ">=", "==", "!="}
+    VALID_FIELDS = {
+        "momentum_score", "rsi", "ret_1m", "ret_1w", "ret_3m",
+        "vol_ratio", "ma50_dev", "ma200_dev", "quality_score",
+        "squeeze_score", "seed_score", "capital_score", "adx",
+        "dist_from_high", "bb_width", "pe_forward", "pe_trailing",
+        "pb", "dividend_yield",
+    }
+    validated = []
+    for r in rules:
+        field = r.get("field", "")
+        op = r.get("op", "")
+        if field not in VALID_FIELDS or op not in VALID_OPS:
+            continue
+        try:
+            value = float(r.get("value", 0))
+        except (ValueError, TypeError):
+            continue
+        validated.append({
+            "field": field,
+            "op": op,
+            "value": value,
+            "label": r.get("label", f"{field} {op} {value}"),
+        })
+    ok = database.update_alert_rules(ticker.upper(), user_id=current_user_id(), rules=validated)
+    if not ok:
+        return jsonify({"error": "watchlist entry not found"}), 404
+    return jsonify({"status": "ok", "rules": validated})
+
+
 # ── Breadth ──
 
 @app.get("/api/breadth/<index_name>")

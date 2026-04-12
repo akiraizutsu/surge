@@ -776,7 +776,10 @@
       <div class="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-xl border border-slate-200 dark:border-gray-800 shadow-xl max-w-2xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-y-auto">
         <div class="p-4 sm:p-6">
           <div class="flex items-center justify-between mb-4">
-            <h2 id="modalTitle" class="text-xl font-bold text-slate-900 dark:text-gray-100"></h2>
+            <div class="flex items-center gap-2">
+              <h2 id="modalTitle" class="text-xl font-bold text-slate-900 dark:text-gray-100"></h2>
+              <button id="alertEditorBtn" onclick="openAlertEditor()" class="hidden w-8 h-8 flex items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-500 dark:text-amber-400 text-sm transition-colors cursor-pointer" title="カスタムアラート設定">⚡</button>
+            </div>
             <button onclick="closeModal()" class="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 text-2xl leading-none rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer" aria-label="閉じる">&times;</button>
           </div>
           <div id="modalContent"></div>

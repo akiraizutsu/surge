@@ -1251,6 +1251,67 @@ def compute_changes(current_ranking: list, prev_ranking: list, index_name: str, 
     }
 
 
+def check_custom_alerts(ranking: list, index_name: str) -> list:
+    """Check custom alert rules against current ranking. Returns events list."""
+    import json as _json
+    import operator as _op
+
+    alert_entries = database.get_all_alert_rules()
+    if not alert_entries:
+        return []
+
+    ops = {"<": _op.lt, ">": _op.gt, "<=": _op.le, ">=": _op.ge, "==": _op.eq, "!=": _op.ne}
+    rank_map = {}
+    for r in ranking:
+        rank_map[r["ticker"]] = r
+
+    events = []
+    for entry in alert_entries:
+        ticker = entry["ticker"]
+        stock = rank_map.get(ticker)
+        if not stock:
+            continue
+        for rule in entry["rules"]:
+            field = rule.get("field", "")
+            op_str = rule.get("op", "")
+            value = rule.get("value")
+            op_fn = ops.get(op_str)
+            if not op_fn or value is None:
+                continue
+            # Resolve field value from flat stock dict or nested technicals/fundamentals
+            actual = stock.get(field)
+            if actual is None:
+                t = stock.get("technicals") or {}
+                actual = t.get(field)
+            if actual is None:
+                f = stock.get("fundamentals") or {}
+                actual = f.get(field)
+            if actual is None:
+                continue
+            try:
+                if op_fn(float(actual), float(value)):
+                    label = rule.get("label", f"{field} {op_str} {value}")
+                    payload = {
+                        "ticker": ticker,
+                        "rule": label,
+                        "field": field,
+                        "op": op_str,
+                        "threshold": value,
+                        "actual": round(float(actual), 2),
+                        "score": stock.get("momentum_score"),
+                        "rank": stock.get("rank"),
+                    }
+                    events.append({
+                        "ticker": ticker,
+                        "index_name": index_name,
+                        "event_type": "custom_alert",
+                        "payload_json": _json.dumps(payload, ensure_ascii=False),
+                    })
+            except (ValueError, TypeError):
+                continue
+    return events
+
+
 def generate_daily_report(ranking: list, regime: dict, breadth: dict, sector_rotation: list, changes: dict, is_japan: bool = False) -> dict:
     """Generate rule-based daily report text.
 
@@ -1721,6 +1782,11 @@ def run_screening(index="sp500", top_n=20, progress_cb=None):
         # Persist watchlist-related events to DB
         if changes.get("events"):
             database.save_watchlist_events(changes["events"])
+        # Custom alert rules check
+        custom_events = check_custom_alerts(ranking, index)
+        if custom_events:
+            database.save_watchlist_events(custom_events)
+            changes["events"].extend(custom_events)
     except Exception:
         changes = {"new_entries": [], "dropped": [], "score_surges": [], "score_drops": [], "watchlist_changes": [], "events": []}
 

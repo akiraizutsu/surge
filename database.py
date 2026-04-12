@@ -275,6 +275,9 @@ def init_db():
         # ADX (trend strength)
         _add_column_if_missing(conn, "screening_results", "adx", "REAL")
 
+        # Smart Watchlist: custom alert rules per watchlist entry
+        _add_column_if_missing(conn, "watchlist", "alert_rules_json", "TEXT")
+
         # LLM Phase 1: user_id columns for per-user data isolation
         # DEFAULT 1 means existing data auto-links to AKIRA (seeded first, id=1)
         _add_column_if_missing(conn, "watchlist", "user_id", "INTEGER DEFAULT 1")
@@ -912,6 +915,57 @@ def get_watchlist(user_id=None):
         ).fetchall()
     conn.close()
     return [r["ticker"] for r in rows]
+
+
+# ── Smart Watchlist: Custom Alert Rules ──
+
+def get_alert_rules(ticker, user_id):
+    """Return alert rules for a specific watchlist entry."""
+    import json as _json
+    conn = _connect()
+    row = conn.execute(
+        "SELECT alert_rules_json FROM watchlist WHERE ticker = ? AND user_id = ?",
+        (ticker.upper(), user_id),
+    ).fetchone()
+    conn.close()
+    if not row or not row["alert_rules_json"]:
+        return []
+    try:
+        return _json.loads(row["alert_rules_json"])
+    except Exception:
+        return []
+
+
+def update_alert_rules(ticker, user_id, rules):
+    """Update alert rules for a watchlist entry. Returns True if updated."""
+    import json as _json
+    conn = _connect()
+    with conn:
+        cur = conn.execute(
+            "UPDATE watchlist SET alert_rules_json = ? WHERE ticker = ? AND user_id = ?",
+            (_json.dumps(rules, ensure_ascii=False), ticker.upper(), user_id),
+        )
+    conn.close()
+    return cur.rowcount > 0
+
+
+def get_all_alert_rules():
+    """Return all watchlist entries that have alert rules set (for screening check)."""
+    import json as _json
+    conn = _connect()
+    rows = conn.execute(
+        "SELECT ticker, user_id, alert_rules_json FROM watchlist WHERE alert_rules_json IS NOT NULL AND alert_rules_json != '[]' AND alert_rules_json != ''"
+    ).fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        try:
+            rules = _json.loads(r["alert_rules_json"])
+            if rules:
+                result.append({"ticker": r["ticker"], "user_id": r["user_id"], "rules": rules})
+        except Exception:
+            continue
+    return result
 
 
 # ── Watchlist Events (Sprint 6) ──
