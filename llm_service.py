@@ -142,6 +142,7 @@ AGENT_SYSTEM_PROMPT_ADDON = """
 - 最大 12 ステップ以内で結論を出す
 - 不確実な場合は "inconclusive" と判定し、追加調査の提案をする
 - 最初に調査計画を述べてから、ツール呼び出しを開始すること
+- **conclude_investigation の summary, evidence, next_steps に内部ツール名（get_ranking, get_stock_detail 等）を絶対に書かない。「ランキングデータ」「銘柄詳細」のように自然な日本語で表現すること**
 """
 
 MAX_AGENT_STEPS = 12
