@@ -262,7 +262,11 @@ def api_chat():
 
 @app.post("/api/agent")
 def api_agent():
-    """Hypothesis investigation agent. Returns NDJSON stream."""
+    """Hypothesis investigation agent. Uses chat_stream with agent_mode=True.
+
+    This reuses the existing chat infrastructure (retry, fallback, rate limit)
+    rather than a custom loop, avoiding free-tier 429 issues.
+    """
     uid = current_user_id()
     if uid is None:
         return jsonify({"error": "not logged in"}), 401
@@ -274,10 +278,13 @@ def api_agent():
     if not hypothesis:
         return jsonify({"error": "hypothesis is required"}), 400
 
+    market_label = "日本株（日経225・グロース250）" if market == "jp" else "米国株（S&P 500・NASDAQ 100）"
+    message = f"以下の投資仮説を検証してください。\n\n対象市場: {market_label}\n\n仮説: {hypothesis}"
+
     def generate():
         try:
             ai = llm_service.AnalystAI(user_id=uid)
-            for chunk in ai.run_agent(hypothesis, market=market):
+            for chunk in ai.chat_stream(message, history=[], agent_mode=True):
                 yield json.dumps(chunk, ensure_ascii=False) + "\n"
         except Exception as e:
             yield json.dumps({"type": "error", "error": f"agent failed: {type(e).__name__}: {e}"}, ensure_ascii=False) + "\n"

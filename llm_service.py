@@ -175,7 +175,7 @@ class AnalystAI:
         tools = [types.Tool(function_declarations=function_decls)]
         return tools
 
-    def chat_stream(self, message, history=None, use_pro=False):
+    def chat_stream(self, message, history=None, use_pro=False, agent_mode=False):
         """Stream chat events. Generator yielding dicts:
 
             {'type': 'text', 'content': str}
@@ -184,6 +184,9 @@ class AnalystAI:
             {'type': 'usage', 'tokens_in': int, 'tokens_out': int, 'cost_usd': float}
             {'type': 'done'}
             {'type': 'error', 'error': str}
+
+        When agent_mode=True, uses the agent system prompt and higher token limit
+        to support multi-tool investigation in a single Gemini session.
         """
         history = history or []
 
@@ -221,11 +224,14 @@ class AnalystAI:
         )
 
         tools = self._build_tools_config(use_pro)
+        system_prompt = self._system_prompt()
+        if agent_mode:
+            system_prompt += AGENT_SYSTEM_PROMPT_ADDON
         config = types.GenerateContentConfig(
-            system_instruction=self._system_prompt(),
+            system_instruction=system_prompt,
             tools=tools,
-            temperature=0.4,
-            max_output_tokens=4000 if self.is_owner else 1500,
+            temperature=0.3 if agent_mode else 0.4,
+            max_output_tokens=4000 if (self.is_owner or agent_mode) else 1500,
         )
 
         # Function-calling loop (up to 6 rounds to avoid infinite loops)

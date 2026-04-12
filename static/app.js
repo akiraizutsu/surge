@@ -3772,8 +3772,8 @@ async function sendAgentMessage() {
   container.scrollTop = container.scrollHeight;
 
   const stepsEl = agentEl.querySelector('#agentSteps');
-  let agentGotConclusion = false;
   let agentAllText = '';
+  let agentStepCount = 0;
 
   try {
     const resp = await fetch('/api/agent', {
@@ -3802,45 +3802,18 @@ async function sendAgentMessage() {
         if (!line) continue;
         try {
           const chunk = JSON.parse(line);
-          if (chunk.type === 'plan') {
+          if (chunk.type === 'text') {
             agentAllText += (chunk.content || '');
             stepsEl.innerHTML += '<div class="text-xs text-slate-600 dark:text-gray-300 mb-2">' + renderChatMarkdown(chunk.content) + '</div>';
-          } else if (chunk.type === 'step') {
-            const icon = chunk.status === 'concluding' ? '📋' : '🔄';
-            stepsEl.innerHTML += '<div id="agentStep' + chunk.step + '" class="flex items-start gap-2 text-xs"><span>' + icon + '</span><span class="text-slate-500 dark:text-gray-400">' + humanizeToolCall(chunk.tool, {}) + '</span></div>';
-          } else if (chunk.type === 'step_result') {
-            const stepEl = document.getElementById('agentStep' + chunk.step);
-            if (stepEl) {
-              stepEl.querySelector('span').textContent = '✅';
-              stepEl.classList.remove('text-slate-500');
+          } else if (chunk.type === 'tool_call') {
+            agentStepCount++;
+            stepsEl.innerHTML += '<div class="flex items-start gap-2 text-xs mb-1"><span>🔄</span><span class="text-slate-500 dark:text-gray-400">' + humanizeToolCall(chunk.name, chunk.args || {}) + '</span></div>';
+          } else if (chunk.type === 'tool_result') {
+            // Replace last 🔄 with ✅
+            var lastSpinner = stepsEl.querySelectorAll('span');
+            for (var si = lastSpinner.length - 1; si >= 0; si--) {
+              if (lastSpinner[si].textContent === '🔄') { lastSpinner[si].textContent = '✅'; break; }
             }
-          } else if (chunk.type === 'text') {
-            agentAllText += chunk.content;
-            stepsEl.innerHTML += '<div class="text-xs text-slate-600 dark:text-gray-300">' + renderChatMarkdown(chunk.content) + '</div>';
-          } else if (chunk.type === 'conclusion') {
-            agentGotConclusion = true;
-            const verdictColors = {
-              supported: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
-              partially_supported: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
-              not_supported: 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400',
-              inconclusive: 'bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-400',
-            };
-            const vcls = verdictColors[chunk.verdict] || verdictColors.inconclusive;
-            const evidenceHtml = (chunk.evidence || []).map(function(e) {
-              var eIcon = e.supports_hypothesis ? '✅' : '⚠️';
-              return '<li class="text-xs text-slate-500 dark:text-gray-400">' + eIcon + ' <strong>' + (e.source || '') + '</strong>: ' + (e.finding || '') + '</li>';
-            }).join('');
-
-            agentEl.innerHTML =
-              '<div class="flex items-center gap-2 mb-3">' +
-                '<span class="text-sm">📋</span>' +
-                '<span class="text-sm font-semibold text-slate-900 dark:text-gray-100">' + (chunk.title || '検証結果') + '</span>' +
-                '<span class="inline-block px-2 py-0.5 text-[10px] rounded-full font-medium ' + vcls + '">' + (chunk.verdict_label || chunk.verdict) + '</span>' +
-              '</div>' +
-              '<div class="text-sm text-slate-700 dark:text-gray-200 mb-3">' + renderChatMarkdown(chunk.summary || '') + '</div>' +
-              (evidenceHtml ? '<ul class="space-y-1 mb-3">' + evidenceHtml + '</ul>' : '') +
-              (chunk.next_steps ? '<div class="text-xs text-slate-400 dark:text-gray-500 mb-2"><strong>今後:</strong> ' + chunk.next_steps + '</div>' : '') +
-              (chunk.note_id ? '<div class="text-[10px] text-primary-500">📓 調査ノート #' + chunk.note_id + ' に保存済み</div>' : '');
           } else if (chunk.type === 'error') {
             stepsEl.innerHTML += '<div class="text-xs text-rose-500">⚠️ ' + chunk.error + '</div>';
           }
@@ -3862,8 +3835,7 @@ async function sendAgentMessage() {
       lastAssistantToolCalls = [];
       const saveDiv = document.createElement('div');
       saveDiv.className = 'mt-3 flex justify-end';
-      const saveLabel = agentGotConclusion ? '📌 ノートに保存済み — 別名で再保存' : '📌 調査結果をノートに保存';
-      saveDiv.innerHTML = '<button onclick="showNoteSaveDialog()" class="text-[10px] px-3 py-1.5 rounded-lg bg-primary-500 text-white hover:bg-primary-600 cursor-pointer transition-colors">' + saveLabel + '</button>';
+      saveDiv.innerHTML = '<button onclick="showNoteSaveDialog()" class="text-[10px] px-3 py-1.5 rounded-lg bg-primary-500 text-white hover:bg-primary-600 cursor-pointer transition-colors">📌 調査結果をノートに保存</button>';
       agentEl.appendChild(saveDiv);
     }
   }
