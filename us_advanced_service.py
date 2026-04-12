@@ -11,11 +11,12 @@ All computed from yfinance .info fields — zero additional API cost.
 from __future__ import annotations
 
 
-def compute_us_advanced(fund: dict) -> dict:
+def compute_us_advanced(fund: dict, options_metrics: dict | None = None) -> dict:
     """Compute advanced US-specific signals from fundamentals dict.
 
     Args:
         fund: dict from get_fundamentals() — includes yfinance .info fields
+        options_metrics: optional dict from options_service.compute_options_metrics()
 
     Returns:
         {
@@ -23,6 +24,7 @@ def compute_us_advanced(fund: dict) -> dict:
           institutional_flow:  {direction, ownership_pct, score, detail},
           earnings_drift:      {direction, pct, score, detail},
           options_signal:      {direction, put_call_ratio, score, detail},
+          options_detail:      {full options metrics} or None,
           us_advanced_score:   0-100 (composite bullish signal),
           us_advanced_tags:    [str],
         }
@@ -31,7 +33,7 @@ def compute_us_advanced(fund: dict) -> dict:
     eps_rev   = _eps_revision(fund)
     inst_flow = _institutional_flow(fund)
     drift     = _earnings_drift(fund)
-    options   = _options_signal(fund)
+    options   = _options_signal(fund, options_metrics)
 
     # Composite score (equal weight, each 0-25)
     composite = round(
@@ -60,11 +62,21 @@ def compute_us_advanced(fund: dict) -> dict:
     elif options["direction"] == "プット優勢":
         tags.append("オプション弱気")
 
+    # Options-specific tags from real data
+    if options_metrics:
+        if options_metrics.get("gamma_squeeze_risk"):
+            tags.append("ガンマスクイーズ警戒")
+        if (options_metrics.get("iv_rank") or 0) > 80:
+            tags.append("IV高水準")
+        if options_metrics.get("unusual_activity"):
+            tags.append("異常コール出来高")
+
     return {
         "eps_revision":       eps_rev,
         "institutional_flow": inst_flow,
         "earnings_drift":     drift,
         "options_signal":     options,
+        "options_detail":     options_metrics,
         "us_advanced_score":  composite,
         "us_advanced_tags":   tags,
     }
@@ -225,14 +237,22 @@ def _earnings_drift(fund: dict) -> dict:
     return {"direction": direction, "score": round(score, 1), "detail": detail}
 
 
-def _options_signal(fund: dict) -> dict:
-    """Infer options sentiment from available yfinance proxy fields.
+def _options_signal(fund: dict, options_metrics: dict | None = None) -> dict:
+    """Options sentiment signal.
 
-    Direct put/call ratio is not in yfinance .info.
-    Proxy: short interest trend as a contrarian options-like signal.
-      - High short interest + rising price = squeeze / forced covering (bullish)
-      - Short interest declining = bears covering (slightly bullish)
+    When options_metrics is provided (from options_service), uses real option chain data.
+    Otherwise falls back to short interest proxy.
     """
+    # ── Real options data path ───────────────────────────────────────────────
+    if options_metrics and options_metrics.get("score") is not None:
+        return {
+            "direction": options_metrics.get("direction", "中立"),
+            "put_call_ratio": options_metrics.get("pcr_volume"),
+            "score": options_metrics["score"],
+            "detail": options_metrics.get("detail", ""),
+        }
+
+    # ── Fallback: short interest proxy ───────────────────────────────────────
     short_pct = fund.get("shortPercentOfFloat") or fund.get("short_pct_of_float") or 0
     short_change = fund.get("short_change_pct") or 0
     ret_1m = fund.get("ret_1m") or 0

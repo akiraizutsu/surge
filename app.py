@@ -862,7 +862,15 @@ def api_us_advanced(ticker):
         merged["days_to_earnings"]   = None
         merged["short_pct_of_float"] = info.get("shortPercentOfFloat")
         merged["short_change_pct"]   = None
-        result = us_advanced_service.compute_us_advanced(merged)
+        # Phase 1: Real options data (2 expiries for live view)
+        options_metrics = None
+        try:
+            import options_service
+            price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
+            options_metrics = options_service.compute_options_metrics(ticker, price, num_expiries=2)
+        except Exception:
+            pass
+        result = us_advanced_service.compute_us_advanced(merged, options_metrics=options_metrics)
         result["ticker"] = ticker
         return jsonify(result)
     except Exception as e:

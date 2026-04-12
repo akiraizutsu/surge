@@ -768,6 +768,13 @@ function renderUsAdvancedTable(ranking) {
       <td class="px-3 py-2 text-xs hidden sm:table-cell ${dirColor(inst.direction)}">${inst.direction || '-'}${inst.ownership_pct ? ` <span class="text-slate-400">${inst.ownership_pct}%</span>` : ''}</td>
       <td class="px-3 py-2 text-xs hidden lg:table-cell ${dirColor(drift.direction)}">${drift.direction || '-'}</td>
       <td class="px-3 py-2 text-xs hidden lg:table-cell"><div class="flex flex-wrap gap-1">${tags || '<span class="text-slate-300">-</span>'}</div></td>
+      <td class="px-3 py-2 text-center text-xs hidden xl:table-cell">${(() => {
+        const opt = adv.options_detail;
+        if (!opt || opt.gex_label == null) return '<span class="text-slate-300">-</span>';
+        const gexCls = opt.gex_label.includes('ネガティブ') ? 'text-rose-400' : opt.gex_label.includes('ポジティブ') ? 'text-emerald-500' : 'text-slate-400';
+        const fire = opt.gamma_squeeze_risk ? ' 🔥' : '';
+        return `<span class="${gexCls} font-medium">${opt.gex_score > 0 ? '+' : ''}${opt.gex_score}${fire}</span>`;
+      })()}</td>
     </tr>`;
   }).join('');
 }
@@ -1732,6 +1739,49 @@ async function showDetail(stock) {
         `).join('')}
       </div>
     </div>` : ''}
+
+    ${!isJapanIndex() && stock.us_advanced && stock.us_advanced.options_detail && stock.us_advanced.options_detail.gex_score != null ? (() => {
+      const opt = stock.us_advanced.options_detail;
+      const gexColor = opt.gex_score <= -30 ? 'text-rose-500' : opt.gex_score >= 30 ? 'text-emerald-500' : 'text-amber-500';
+      const riskBadge = opt.gamma_squeeze_risk
+        ? '<span class="inline-block px-2 py-0.5 text-[10px] rounded-full font-semibold bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400">🔥 警戒</span>'
+        : '<span class="inline-block px-2 py-0.5 text-[10px] rounded-full font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">低リスク</span>';
+      return `
+    <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">オプション動向</h3>
+    <div class="mb-6 bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <div class="text-xs text-slate-500 dark:text-gray-400">GEXスコア</div>
+          <div class="text-3xl font-bold ${gexColor}">${opt.gex_score > 0 ? '+' : ''}${opt.gex_score}</div>
+          <div class="text-[10px] text-slate-400 dark:text-gray-500 mt-0.5">${opt.gex_label || ''}</div>
+        </div>
+        <div class="text-right">
+          <div class="text-[10px] text-slate-400 dark:text-gray-500 mb-1">ガンマスクイーズリスク</div>
+          ${riskBadge}
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-2 mb-3">
+        ${[
+          ['PCR (出来高)', opt.pcr_volume != null ? opt.pcr_volume.toFixed(2) : '-'],
+          ['PCR (建玉)', opt.pcr_oi != null ? opt.pcr_oi.toFixed(2) : '-'],
+          ['方向', opt.direction || '-'],
+          ['IV Rank', opt.iv_rank != null ? opt.iv_rank.toFixed(0) : '-'],
+          ['ATM IV', opt.iv_atm != null ? opt.iv_atm.toFixed(1) + '%' : '-'],
+          ['IVスキュー', opt.skew != null ? (opt.skew > 0 ? '+' : '') + opt.skew.toFixed(1) + 'pt' : '-'],
+          ['Max Pain', opt.max_pain != null ? '$' + opt.max_pain.toFixed(0) : '-'],
+          ['コール出来高', opt.call_volume != null ? opt.call_volume.toLocaleString() : '-'],
+          ['プット出来高', opt.put_volume != null ? opt.put_volume.toLocaleString() : '-'],
+        ].map(([label, val]) => \`
+          <div class="bg-slate-50 dark:bg-gray-800 rounded-lg p-2 text-center border border-slate-100 dark:border-gray-700">
+            <div class="text-[10px] text-slate-400 dark:text-gray-500">\${label}</div>
+            <div class="font-semibold text-xs text-slate-900 dark:text-gray-100">\${val}</div>
+          </div>
+        \`).join('')}
+      </div>
+      ${opt.unusual_activity ? '<div class="text-[10px] text-amber-500 dark:text-amber-400 font-medium mb-1">⚠ 異常なコール出来高を検出</div>' : ''}
+      <div class="text-[10px] text-slate-400 dark:text-gray-500">満期: ${opt.expiry_used || '-'} / スコア: ${opt.score != null ? opt.score.toFixed(1) : '-'}/100</div>
+    </div>`;
+    })() : ''}
 
     <h3 class="text-xs font-medium text-slate-500 dark:text-gray-400 mb-3 tracking-wider">ファンダメンタルズ</h3>
     <div class="grid grid-cols-3 gap-3">
