@@ -74,6 +74,7 @@
         <p class="text-[10px] font-semibold text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-3">目次</p>
         <a href="#overview"    class="toc-link block py-1">概要</a>
         <p class="text-[10px] font-semibold text-primary-500 uppercase tracking-widest mt-4 mb-2">AI機能 🤖</p>
+        <a href="#agent"       class="toc-link block py-1 font-semibold text-violet-500 dark:text-violet-400">🔍 仮説検証エージェント</a>
         <a href="#chatbot"     class="toc-link block py-1">🤖 AIロボちゃん</a>
         <a href="#notes"       class="toc-link block py-1">📓 調査ノート</a>
         <a href="#usermenu"    class="toc-link block py-1">👤 ユーザーメニュー</a>
@@ -129,6 +130,148 @@
             <h3 class="font-semibold mb-1">米国株ページ <code class="text-xs bg-slate-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">/us</code></h3>
             <p class="text-sm text-slate-500 dark:text-gray-400">S&P 500・NASDAQ 100。ショートスクイーズ・EPS改定・機関投資家フロー・決算後ドリフトを分析。</p>
           </div>
+        </div>
+      </section>
+
+      <!-- Hypothesis Investigation Agent -->
+      <section id="agent" class="section-anchor">
+        <h2 class="text-xl font-bold mb-4 pb-2 border-b-2 border-violet-300 dark:border-violet-700 flex items-center gap-2">
+          🔍 投資仮説検証エージェント
+          <span class="badge bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400">NEW</span>
+        </h2>
+
+        <!-- Hero description -->
+        <div class="bg-gradient-to-br from-violet-50 to-white dark:from-violet-950/30 dark:to-gray-900 rounded-xl border border-violet-200 dark:border-violet-800 p-6 mb-5">
+          <p class="text-sm text-slate-700 dark:text-gray-200 mb-3">
+            <strong>仮説を1文で投げるだけで、AIが自律的に調査を計画・実行し、根拠付きで検証結果をまとめる</strong>エージェント機能です。従来のチャットでは1つずつ質問する必要がありましたが、エージェントモードでは AIが自分で考えて次のステップを決め、必要なデータを連鎖的に取得して総合判断します。
+          </p>
+          <div class="flex items-center gap-2 text-xs text-violet-600 dark:text-violet-400">
+            <span class="font-semibold">従来のチャット:</span> ユーザーが1つずつ質問 → AI が1回答えて終了
+          </div>
+          <div class="flex items-center gap-2 text-xs text-violet-600 dark:text-violet-400 mt-1">
+            <span class="font-semibold">エージェント:</span> 仮説を1文で入力 → <strong>AIが4〜8ステップを自律的に実行</strong> → 結論+根拠レポート
+          </div>
+        </div>
+
+        <!-- How to use: Step by step -->
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 mb-5">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-gray-100 mb-4">使い方（4ステップ）</h3>
+          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="flex flex-col gap-2 p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <span class="flex-shrink-0 w-7 h-7 bg-violet-500 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
+              <p class="text-xs text-slate-600 dark:text-gray-400">画面右下の <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-500 text-white text-[10px]">🤖</span> をクリックしてチャットパネルを開く</p>
+            </div>
+            <div class="flex flex-col gap-2 p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <span class="flex-shrink-0 w-7 h-7 bg-violet-500 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
+              <p class="text-xs text-slate-600 dark:text-gray-400">ヘッダーの <span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 font-semibold">🔍 仮説検証</span> ボタンをクリックしてエージェントモードをON（ボタンが紫色に変化）</p>
+            </div>
+            <div class="flex flex-col gap-2 p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <span class="flex-shrink-0 w-7 h-7 bg-violet-500 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
+              <p class="text-xs text-slate-600 dark:text-gray-400"><strong>仮説を1文で入力</strong>して送信。AIが自動的に調査を開始し、各ステップの進捗がリアルタイムで表示される</p>
+            </div>
+            <div class="flex flex-col gap-2 p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <span class="flex-shrink-0 w-7 h-7 bg-violet-500 text-white rounded-full flex items-center justify-center text-xs font-bold">4</span>
+              <p class="text-xs text-slate-600 dark:text-gray-400">調査完了後、<strong>検証結果カード</strong>（支持/部分的/非支持/不明）が表示され、調査ノートに自動保存される</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- What happens during investigation -->
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 mb-5">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-gray-100 mb-3">調査中の画面の見方</h3>
+          <div class="space-y-3 text-sm text-slate-600 dark:text-gray-300">
+            <div class="flex items-start gap-3">
+              <span class="text-base mt-0.5">📝</span>
+              <div><strong>調査計画</strong> — AIが最初に「この仮説を3つの観点から検証します」のような計画を表示します</div>
+            </div>
+            <div class="flex items-start gap-3">
+              <span class="text-base mt-0.5">🔄</span>
+              <div><strong>実行中ステップ</strong> — 現在データを取得中のステップ。「セクターローテーションを確認中...」のように何をしているか表示されます</div>
+            </div>
+            <div class="flex items-start gap-3">
+              <span class="text-base mt-0.5">✅</span>
+              <div><strong>完了ステップ</strong> — データ取得が終わったステップ。AIが次のステップを自動で判断します</div>
+            </div>
+            <div class="flex items-start gap-3">
+              <span class="text-base mt-0.5">📋</span>
+              <div><strong>検証結果カード</strong> — 全ステップ完了後に表示。判定バッジ・要約・根拠リスト・今後のウォッチポイントを含みます</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Verdict explanation -->
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5 mb-5">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-gray-100 mb-3">検証結果の見方</h3>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div class="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg">
+              <span class="inline-block px-2 py-1 text-xs rounded-full font-semibold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">✅ 支持される</span>
+              <p class="text-xs text-slate-500 dark:text-gray-400">複数の根拠が仮説を裏付けている</p>
+            </div>
+            <div class="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg">
+              <span class="inline-block px-2 py-1 text-xs rounded-full font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">⚠️ 部分的に支持</span>
+              <p class="text-xs text-slate-500 dark:text-gray-400">一部の根拠は支持するが、矛盾するデータもある</p>
+            </div>
+            <div class="flex items-center gap-3 p-3 bg-rose-50 dark:bg-rose-950/20 rounded-lg">
+              <span class="inline-block px-2 py-1 text-xs rounded-full font-semibold bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400">❌ 支持されない</span>
+              <p class="text-xs text-slate-500 dark:text-gray-400">データが仮説と矛盾している</p>
+            </div>
+            <div class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-gray-800 rounded-lg">
+              <span class="inline-block px-2 py-1 text-xs rounded-full font-semibold bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-400">❓ 判断不能</span>
+              <p class="text-xs text-slate-500 dark:text-gray-400">十分なデータが得られなかった</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Example hypotheses -->
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 p-5">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-gray-100 mb-3">仮説の入力例</h3>
+          <p class="text-xs text-slate-500 dark:text-gray-400 mb-3">以下のような仮説を入力すると、AIが適切なツールを自動選択して検証します。</p>
+          <div class="space-y-2">
+            <div class="flex items-start gap-2 p-2.5 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <span class="text-xs mt-0.5">🇯🇵</span>
+              <div>
+                <p class="text-xs font-medium text-slate-700 dark:text-gray-200">「半導体セクターに資金が回り始めている」</p>
+                <p class="text-[10px] text-slate-400 dark:text-gray-500">→ セクターローテーション + ランキング + OBV で検証</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-2 p-2.5 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <span class="text-xs mt-0.5">🇯🇵</span>
+              <div>
+                <p class="text-xs font-medium text-slate-700 dark:text-gray-200">「グロース市場に反発の兆候がある」</p>
+                <p class="text-[10px] text-slate-400 dark:text-gray-500">→ レジーム + 騰落比率 + 逆張り候補 で検証</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-2 p-2.5 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <span class="text-xs mt-0.5">🇺🇸</span>
+              <div>
+                <p class="text-xs font-medium text-slate-700 dark:text-gray-200">「NVIDIA の決算前にサプライチェーン銘柄を仕込む価値がある」</p>
+                <p class="text-[10px] text-slate-400 dark:text-gray-500">→ 銘柄詳細 + 類似銘柄 + EPS改定 + オプション動向 で検証</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-2 p-2.5 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <span class="text-xs mt-0.5">🇺🇸</span>
+              <div>
+                <p class="text-xs font-medium text-slate-700 dark:text-gray-200">「ディフェンシブ銘柄への資金逃避が起きている」</p>
+                <p class="text-[10px] text-slate-400 dark:text-gray-500">→ セクターローテーション + 相関マトリクス + レジーム で検証</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-2 p-2.5 bg-slate-50 dark:bg-gray-800/50 rounded-lg">
+              <span class="text-xs mt-0.5">🇯🇵</span>
+              <div>
+                <p class="text-xs font-medium text-slate-700 dark:text-gray-200">「最近の円安で輸出関連株が上がっているはず」</p>
+                <p class="text-[10px] text-slate-400 dark:text-gray-500">→ ランキング + セクター比較 + Web検索 で検証</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Technical notes -->
+        <div class="mt-4 p-3 bg-slate-50 dark:bg-gray-800/50 rounded-lg text-xs text-slate-400 dark:text-gray-500 space-y-1">
+          <p>• 調査は最大 <strong>12ステップ</strong>で自動的に結論を出します（典型的な調査は4〜8ステップ）</p>
+          <p>• 1回のエージェント実行は、日次リクエスト制限の <strong>1回分</strong> としてカウントされます</p>
+          <p>• 検証結果は <strong>調査ノートに自動保存</strong> されます（タグ: agent, hypothesis, 判定結果）</p>
+          <p>• AIが使うデータソースはチャットモードと同じ（Surge DB + EDINET + Web検索 + Gemini知識）</p>
+          <p>• 日本株ページで起動すると日経225/グロース250、米国株ページではS&P500/NASDAQ100が対象になります</p>
         </div>
       </section>
 
