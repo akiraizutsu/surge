@@ -461,10 +461,12 @@ class AnalystAI:
                 total_tokens_out += (response.usage_metadata.candidates_token_count or 0)
 
             if not response.candidates:
-                yield {"type": "error", "error": "empty response"}
+                yield {"type": "error", "error": "AIからの応答が空でした。再度お試しください。"}
                 return
 
-            parts = response.candidates[0].content.parts or []
+            candidate = response.candidates[0]
+            content = candidate.content if candidate.content else None
+            parts = (content.parts or []) if content else []
             function_calls = []
             text_parts = []
 
@@ -473,6 +475,10 @@ class AnalystAI:
                     function_calls.append(part.function_call)
                 elif hasattr(part, "text") and part.text:
                     text_parts.append(part.text)
+
+            # If candidate has no usable content, skip this round
+            if not function_calls and not text_parts:
+                continue
 
             # Emit plan text (first text response before any tool call)
             if text_parts:
