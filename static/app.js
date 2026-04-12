@@ -3803,6 +3803,7 @@ async function sendAgentMessage() {
         try {
           const chunk = JSON.parse(line);
           if (chunk.type === 'plan') {
+            agentAllText += (chunk.content || '');
             stepsEl.innerHTML += '<div class="text-xs text-slate-600 dark:text-gray-300 mb-2">' + renderChatMarkdown(chunk.content) + '</div>';
           } else if (chunk.type === 'step') {
             const icon = chunk.status === 'concluding' ? '📋' : '🔄';
@@ -3854,14 +3855,15 @@ async function sendAgentMessage() {
     document.getElementById('chatSendBtn').disabled = false;
     await loadChatUsage();
 
-    // If agent finished without conclude_investigation, show manual save button
-    if (!agentGotConclusion && agentAllText.length > 50) {
+    // Always show save button when there's agent output
+    if (agentAllText.length > 20) {
       lastAssistantAnswer = agentAllText;
       lastAssistantQuestion = hypothesis;
       lastAssistantToolCalls = [];
       const saveDiv = document.createElement('div');
-      saveDiv.className = 'mt-2 flex justify-end';
-      saveDiv.innerHTML = '<button onclick="showNoteSaveDialog()" class="text-[10px] px-3 py-1.5 rounded-lg bg-primary-500 text-white hover:bg-primary-600 cursor-pointer transition-colors">📌 調査結果をノートに保存</button>';
+      saveDiv.className = 'mt-3 flex justify-end';
+      const saveLabel = agentGotConclusion ? '📌 ノートに保存済み — 別名で再保存' : '📌 調査結果をノートに保存';
+      saveDiv.innerHTML = '<button onclick="showNoteSaveDialog()" class="text-[10px] px-3 py-1.5 rounded-lg bg-primary-500 text-white hover:bg-primary-600 cursor-pointer transition-colors">' + saveLabel + '</button>';
       agentEl.appendChild(saveDiv);
     }
   }
