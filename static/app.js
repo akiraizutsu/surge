@@ -3268,8 +3268,7 @@ async function fetchCurrentUser() {
       }
       document.getElementById('proModeCheckbox').checked = chatProMode;
       updateChatModelBadge();
-      // Show agent mode button + model badge + controls row for owner
-      document.getElementById('agentModeBtn')?.classList.remove('hidden');
+      // Show model badge + controls row for owner
       document.getElementById('chatModelBadge')?.classList.remove('hidden');
       document.getElementById('chatControlsRow')?.classList.remove('hidden');
       // Show manual-run screening button for owner only

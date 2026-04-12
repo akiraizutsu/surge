@@ -775,12 +775,12 @@
               <span id="chatModelBadge" class="hidden text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 font-mono shrink-0">flash</span>
             </h2>
             <div class="flex items-center gap-1.5 shrink-0 ml-2">
+              <button id="agentModeBtn" onclick="toggleAgentMode()" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 hover:bg-violet-100 dark:hover:bg-violet-900/30 hover:text-violet-600 dark:hover:text-violet-400 transition-colors cursor-pointer">🔍 仮説検証</button>
               <button onclick="clearChatHistory()" class="text-[10px] text-slate-400 dark:text-gray-500 hover:text-primary-500 transition-colors cursor-pointer">クリア</button>
               <button onclick="closeChatDrawer()" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer text-slate-400 dark:text-gray-500">✕</button>
             </div>
           </div>
           <div id="chatControlsRow" class="hidden flex items-center gap-2">
-            <button id="agentModeBtn" onclick="toggleAgentMode()" class="hidden text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 hover:bg-violet-100 dark:hover:bg-violet-900/30 hover:text-violet-600 dark:hover:text-violet-400 transition-colors cursor-pointer">🔍 仮説検証</button>
             <label id="proModeToggle" class="hidden items-center gap-1 text-xs cursor-pointer">
               <input type="checkbox" id="proModeCheckbox" onchange="toggleProMode(event)" class="sr-only peer">
               <span class="w-7 h-3.5 rounded-full bg-slate-300 dark:bg-gray-700 peer-checked:bg-primary-500 relative transition-colors">

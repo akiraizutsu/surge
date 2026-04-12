@@ -407,10 +407,11 @@ class AnalystAI:
         plan_sent = False
 
         import time
-        # Free tier: 5 req/min → need ~13s between calls to stay under limit.
-        # Paid tier has higher limits so this spacing becomes unnecessary overhead
-        # but is safe either way.
+        # Free tier: 5 req/min per model. Use cooldown + model rotation to stay
+        # within limits. If primary model (flash) hits 429, fall back to flash-lite
+        # which has its own separate quota.
         _STEP_COOLDOWN = int(os.environ.get("AGENT_STEP_COOLDOWN", "13"))
+        agent_model = model  # may switch to fallback during the loop
 
         for round_idx in range(MAX_AGENT_STEPS + 2):
             # Rate-limit spacing: wait between Gemini calls to avoid 429
@@ -419,22 +420,30 @@ class AnalystAI:
 
             response = None
             last_error = None
-            for retry in range(3):
-                try:
-                    response = client.models.generate_content(
-                        model=model, contents=contents, config=config,
-                    )
-                    break
-                except Exception as e:
-                    last_error = e
-                    err_str = str(e)
-                    is_quota = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
-                    is_transient = "503" in err_str or "UNAVAILABLE" in err_str
-                    if is_quota or is_transient:
-                        # Wait longer: 15/30/45s for quota, 2/4/8s for transient
-                        wait = (15 * (retry + 1)) if is_quota else (2 ** (retry + 1))
-                        time.sleep(wait)
-                        continue
+            # Try current model, then fallback model (each has its own quota)
+            models_to_try = [agent_model]
+            if agent_model != FALLBACK_MODEL:
+                models_to_try.append(FALLBACK_MODEL)
+
+            for attempt_model in models_to_try:
+                for retry in range(3):
+                    try:
+                        response = client.models.generate_content(
+                            model=attempt_model, contents=contents, config=config,
+                        )
+                        agent_model = attempt_model
+                        break
+                    except Exception as e:
+                        last_error = e
+                        err_str = str(e)
+                        is_quota = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
+                        is_transient = "503" in err_str or "UNAVAILABLE" in err_str
+                        if is_quota or is_transient:
+                            wait = (15 * (retry + 1)) if is_quota else (2 ** (retry + 1))
+                            time.sleep(wait)
+                            continue
+                        break
+                if response is not None:
                     break
 
             if response is None:
@@ -503,10 +512,10 @@ class AnalystAI:
                             "title": fn_args.get("title", ""),
                         }
                         # Record usage and finish
-                        cost = rate_limit_service.calculate_cost(model, total_tokens_in, total_tokens_out)
-                        rate_limit_service.record_usage(self.user_id, model, total_tokens_in, total_tokens_out)
+                        cost = rate_limit_service.calculate_cost(agent_model, total_tokens_in, total_tokens_out)
+                        rate_limit_service.record_usage(self.user_id, agent_model, total_tokens_in, total_tokens_out)
                         yield {"type": "usage", "tokens_in": total_tokens_in, "tokens_out": total_tokens_out,
-                               "cost_usd": round(cost, 6), "model": model}
+                               "cost_usd": round(cost, 6), "model": agent_model}
                         yield {"type": "done"}
                         return
 
@@ -534,8 +543,8 @@ class AnalystAI:
             break
 
         # Record usage
-        cost = rate_limit_service.calculate_cost(model, total_tokens_in, total_tokens_out)
-        rate_limit_service.record_usage(self.user_id, model, total_tokens_in, total_tokens_out)
+        cost = rate_limit_service.calculate_cost(agent_model, total_tokens_in, total_tokens_out)
+        rate_limit_service.record_usage(self.user_id, agent_model, total_tokens_in, total_tokens_out)
         yield {"type": "usage", "tokens_in": total_tokens_in, "tokens_out": total_tokens_out,
-               "cost_usd": round(cost, 6), "model": model}
+               "cost_usd": round(cost, 6), "model": agent_model}
         yield {"type": "done"}
