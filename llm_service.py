@@ -249,34 +249,41 @@ class AnalystAI:
             if model != FALLBACK_MODEL:
                 models_to_try.append(FALLBACK_MODEL)
 
+            hit_quota = False
             for attempt_model in models_to_try:
-                for retry in range(4):
+                # 429 strategy: don't burn time retrying the same model.
+                # Try once, if 429 → immediately switch to fallback model.
+                # Only retry on 503 (transient, usually resolves in 1-2s).
+                max_retries = 2 if attempt_model == FALLBACK_MODEL else 1
+                for retry in range(max_retries):
                     try:
                         response = client.models.generate_content(
                             model=attempt_model,
                             contents=contents,
                             config=config,
                         )
-                        # Silently record the model actually used for cost calc
                         model = attempt_model
                         break
                     except Exception as e:
                         last_error = e
                         err_str = str(e)
+                        is_quota = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
                         is_transient = (
                             "503" in err_str
                             or "UNAVAILABLE" in err_str
                             or "overloaded" in err_str.lower()
                         )
-                        is_quota = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
-                        if is_transient or is_quota:
-                            # Longer backoff for 429 (API says ~30s), shorter for 503
-                            wait = (8 * (retry + 1)) if is_quota else (2 ** retry)
-                            time.sleep(wait)
+                        if is_quota:
+                            hit_quota = True
+                            break
+                        if is_transient:
+                            time.sleep(2 ** retry)
                             continue
                         break
                 if response is not None:
                     break
+                if hit_quota:
+                    time.sleep(2)
 
             if response is None:
                 # User-friendly message without leaking raw API details
@@ -360,204 +367,3 @@ class AnalystAI:
             "model": model,
         }
         yield {"type": "done", "final_text": final_text}
-
-    def run_agent(self, hypothesis, market="jp"):
-        """Run the hypothesis investigation agent. Generator yielding NDJSON events:
-
-            {'type': 'plan', 'content': str}
-            {'type': 'step', 'step': int, 'tool': str, 'summary': str}
-            {'type': 'step_result', 'step': int, 'tool': str, 'summary': str}
-            {'type': 'conclusion', 'verdict': str, 'summary': str, 'note_id': int}
-            {'type': 'usage', ...}
-            {'type': 'done'}
-            {'type': 'error', 'error': str}
-        """
-        # Rate limit check
-        allowed, reason = rate_limit_service.check_rate_limit(self.user_id)
-        if not allowed:
-            yield {"type": "error", "error": reason}
-            return
-
-        model = DEFAULT_MODEL
-
-        try:
-            client = get_client()
-        except Exception as e:
-            yield {"type": "error", "error": f"LLM client init failed: {e}"}
-            return
-
-        # Build system prompt with agent addon
-        system_prompt = self._system_prompt() + AGENT_SYSTEM_PROMPT_ADDON
-
-        # Initial user message with market context
-        market_label = "日本株（日経225・グロース250）" if market == "jp" else "米国株（S&P 500・NASDAQ 100）"
-        user_message = f"以下の投資仮説を検証してください。\n\n対象市場: {market_label}\n\n仮説: {hypothesis}"
-
-        contents = [
-            types.Content(
-                role="user",
-                parts=[types.Part.from_text(text=user_message)],
-            )
-        ]
-
-        tools = self._build_tools_config(use_pro=False)
-        config = types.GenerateContentConfig(
-            system_instruction=system_prompt,
-            tools=tools,
-            temperature=0.3,
-            max_output_tokens=4000,
-        )
-
-        total_tokens_in = 0
-        total_tokens_out = 0
-        step = 0
-        plan_sent = False
-
-        import time
-        # Free tier: 5 req/min per model. Use cooldown + model rotation to stay
-        # within limits. If primary model (flash) hits 429, fall back to flash-lite
-        # which has its own separate quota.
-        _STEP_COOLDOWN = int(os.environ.get("AGENT_STEP_COOLDOWN", "13"))
-        agent_model = model  # may switch to fallback during the loop
-
-        for round_idx in range(MAX_AGENT_STEPS + 2):
-            # Rate-limit spacing: wait between Gemini calls to avoid 429
-            if round_idx > 0 and _STEP_COOLDOWN > 0:
-                time.sleep(_STEP_COOLDOWN)
-
-            response = None
-            last_error = None
-            # Try current model, then fallback model (each has its own quota)
-            models_to_try = [agent_model]
-            if agent_model != FALLBACK_MODEL:
-                models_to_try.append(FALLBACK_MODEL)
-
-            for attempt_model in models_to_try:
-                for retry in range(3):
-                    try:
-                        response = client.models.generate_content(
-                            model=attempt_model, contents=contents, config=config,
-                        )
-                        agent_model = attempt_model
-                        break
-                    except Exception as e:
-                        last_error = e
-                        err_str = str(e)
-                        is_quota = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
-                        is_transient = "503" in err_str or "UNAVAILABLE" in err_str
-                        if is_quota or is_transient:
-                            wait = (15 * (retry + 1)) if is_quota else (2 ** (retry + 1))
-                            time.sleep(wait)
-                            continue
-                        break
-                if response is not None:
-                    break
-
-            if response is None:
-                err_str = str(last_error) if last_error else ""
-                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                    friendly = "AIが混雑しています。1分ほど待ってから再度お試しください。"
-                else:
-                    friendly = "AIへの接続に失敗しました。しばらくしてから再度お試しください。"
-                yield {"type": "error", "error": friendly}
-                return
-
-            if response.usage_metadata:
-                total_tokens_in += (response.usage_metadata.prompt_token_count or 0)
-                total_tokens_out += (response.usage_metadata.candidates_token_count or 0)
-
-            if not response.candidates:
-                yield {"type": "error", "error": "AIからの応答が空でした。再度お試しください。"}
-                return
-
-            candidate = response.candidates[0]
-            content = candidate.content if candidate.content else None
-            parts = (content.parts or []) if content else []
-            function_calls = []
-            text_parts = []
-
-            for part in parts:
-                if hasattr(part, "function_call") and part.function_call:
-                    function_calls.append(part.function_call)
-                elif hasattr(part, "text") and part.text:
-                    text_parts.append(part.text)
-
-            # If candidate has no usable content, skip this round
-            if not function_calls and not text_parts:
-                continue
-
-            # Emit plan text (first text response before any tool call)
-            if text_parts:
-                joined = "".join(text_parts)
-                if not plan_sent and not function_calls:
-                    # Text-only response before conclusion — treat as plan or intermediate thought
-                    yield {"type": "plan", "content": joined}
-                    plan_sent = True
-                elif not plan_sent and function_calls:
-                    yield {"type": "plan", "content": joined}
-                    plan_sent = True
-                else:
-                    yield {"type": "text", "content": joined}
-
-            if function_calls:
-                contents.append(response.candidates[0].content)
-                function_response_parts = []
-
-                for fc in function_calls:
-                    fn_name = fc.name
-                    fn_args = dict(fc.args) if fc.args else {}
-                    step += 1
-
-                    # Check for conclusion
-                    if fn_name == "conclude_investigation":
-                        yield {"type": "step", "step": step, "tool": fn_name,
-                               "summary": "検証結果をまとめています...", "status": "concluding"}
-                        result = llm_tools.dispatch_tool(fn_name, fn_args, self.user_id)
-                        yield {
-                            "type": "conclusion",
-                            "verdict": fn_args.get("verdict", "inconclusive"),
-                            "verdict_label": result.get("verdict_label", ""),
-                            "summary": fn_args.get("summary", ""),
-                            "evidence": fn_args.get("evidence", []),
-                            "related_tickers": fn_args.get("related_tickers", []),
-                            "next_steps": fn_args.get("next_steps", ""),
-                            "note_id": result.get("note_id"),
-                            "title": fn_args.get("title", ""),
-                        }
-                        # Record usage and finish
-                        cost = rate_limit_service.calculate_cost(agent_model, total_tokens_in, total_tokens_out)
-                        rate_limit_service.record_usage(self.user_id, agent_model, total_tokens_in, total_tokens_out)
-                        yield {"type": "usage", "tokens_in": total_tokens_in, "tokens_out": total_tokens_out,
-                               "cost_usd": round(cost, 6), "model": agent_model}
-                        yield {"type": "done"}
-                        return
-
-                    # Regular tool call
-                    yield {"type": "step", "step": step, "tool": fn_name,
-                           "summary": f"ステップ {step}: {fn_name} を実行中...", "status": "investigating"}
-                    result = llm_tools.dispatch_tool(fn_name, fn_args, self.user_id)
-                    yield {"type": "step_result", "step": step, "tool": fn_name,
-                           "summary": f"ステップ {step} 完了", "status": "done"}
-
-                    function_response_parts.append(
-                        types.Part.from_function_response(
-                            name=fn_name, response={"result": result},
-                        )
-                    )
-
-                contents.append(types.Content(role="user", parts=function_response_parts))
-
-                if step >= MAX_AGENT_STEPS:
-                    yield {"type": "text", "content": f"（ステップ上限 {MAX_AGENT_STEPS} に到達しました。現時点の調査結果をまとめます。）"}
-                    break
-                continue
-
-            # No function calls — LLM finished without conclude_investigation
-            break
-
-        # Record usage
-        cost = rate_limit_service.calculate_cost(agent_model, total_tokens_in, total_tokens_out)
-        rate_limit_service.record_usage(self.user_id, agent_model, total_tokens_in, total_tokens_out)
-        yield {"type": "usage", "tokens_in": total_tokens_in, "tokens_out": total_tokens_out,
-               "cost_usd": round(cost, 6), "model": agent_model}
-        yield {"type": "done"}
